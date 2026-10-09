@@ -1,0 +1,8 @@
+include main.py
+recursive-include config *.toml
+exclude config/cluster.local.toml
+prune config/generated
+recursive-include docs *.md
+recursive-include examples *.toml *.sh
+recursive-include scripts *.sh
+recursive-include slurm *.sbatch

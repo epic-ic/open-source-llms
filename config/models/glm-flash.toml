@@ -1,0 +1,37 @@
+[model]
+name = "GLM-5.3-Flash (Unsloth GGUF)"
+alias = "glm-5.3-flash"
+quant = "UD-Q4_K_XL"
+
+[download]
+repo = "unsloth/GLM-5.3-Flash-GGUF"
+revision = "main"
+directory = "models/GLM-5.3-Flash-GGUF"
+include = ["{quant}/*.gguf"]
+entrypoint = "{quant}/*-00001-of-*.gguf"
+
+[server]
+port = 8001
+context_size = 131072
+max_output = 16384
+reasoning = "on"
+reasoning_effort = "high"
+temperature = 1.0
+top_p = 0.95
+top_k = 0
+min_p = 0.0
+presence_penalty = 0.0
+repeat_penalty = 1.0
+split_mode = "layer"
+cache_type_k = "bf16"
+cache_type_v = "bf16"
+flash_attn = "on"
+
+[slurm]
+gpus = 5
+cpus_per_task = 32
+mem = "256G"
+
+[capabilities]
+tools = true
+responses = true

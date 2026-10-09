@@ -1,7 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "llms"
-version = "0.1.0"
-description = "Access a Slurm-hosted open source model"
+name = "slurm-llm"
+version = "0.2.0"
+description = "Prepare, serve, and connect to open source models on Slurm"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
+
+[project.scripts]
+llm = "slurm_llm.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["slurm_llm*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

@@ -1,0 +1,35 @@
+[model]
+name = "Qwen3.8 27B (Unsloth GGUF)"
+alias = "qwen3.8-27b"
+quant = "UD-Q4_K_XL"
+
+[download]
+repo = "unsloth/Qwen3.8-27B-GGUF"
+revision = "main"
+directory = "models"
+include = ["Qwen3.8-27B-{quant}.gguf"]
+entrypoint = "Qwen3.8-27B-{quant}.gguf"
+
+[server]
+context_size = 32768
+max_output = 8192
+reasoning = "off"
+reasoning_effort = "medium"
+temperature = 0.7
+top_p = 0.8
+top_k = 20
+min_p = 0.0
+presence_penalty = 1.5
+repeat_penalty = 1.0
+cache_type_k = "bf16"
+cache_type_v = "bf16"
+flash_attn = "on"
+
+[slurm]
+gpus = 1
+cpus_per_task = 8
+mem = "96G"
+
+[capabilities]
+tools = true
+responses = true

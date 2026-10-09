@@ -1,0 +1,28 @@
+# Copy to config/models/my-model.toml, or use `llm init --backend script`.
+[model]
+name = "My model with vLLM"
+alias = "my-model"
+backend = "script"
+repo = "ORG/MODEL_REPOSITORY" # Replace with a model supported by your vLLM version.
+
+[scripts]
+serve = "examples/backends/vllm.sh"
+# prepare = "scripts/models/prepare-my-model.sh"
+
+[server]
+context_size = 8192
+max_output = 2048
+parallel = 1
+# Add flags for the selected model, e.g. --enable-auto-tool-choice and its tool parser.
+extra_args = []
+
+[slurm]
+gpus = 1
+cpus_per_task = 8
+mem = "64G"
+time = "08:00:00"
+
+[capabilities]
+# Enable only after checking your model, chat template, and runtime.
+tools = false
+responses = false
