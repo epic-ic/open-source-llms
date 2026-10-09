@@ -1,0 +1,22 @@
+# Merge these tables into ~/.codex/config.toml on your local machine.
+# Start with: codex --profile slurm_qwen
+[model_providers.slurm_qwen]
+name = "Qwen on Slurm"
+base_url = "http://127.0.0.1:8000/v1"
+env_key = "QWEN_API_KEY"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+stream_idle_timeout_ms = 300000
+
+[profiles.slurm_qwen]
+model_provider = "slurm_qwen"
+model = "qwen3.8-27b"
+model_context_window = 32768
+model_auto_compact_token_limit = 24000
+
+[profiles.slurm_qwen_next]
+model_provider = "slurm_qwen"
+model = "qwen3.8-flash-next"
+model_context_window = 32768
+model_auto_compact_token_limit = 24000

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "slurm-qwen/qwen3.8-flash-next",
+  "providers": {
+    "slurm-qwen": {
+      "name": "Qwen on Slurm",
+      "env": ["QWEN_API_KEY"],
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "http://127.0.0.1:8000/v1"
+      },
+      "models": {
+        "qwen3.8-flash-next": {
+          "name": "Qwen3.8 Flash Next (Unsloth GGUF)",
+          "capabilities": {
+            "tools": true,
+            "input": ["text"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+[project]
+name = "llms"
+version = "0.1.0"
+description = "Access a Slurm-hosted open source model"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
