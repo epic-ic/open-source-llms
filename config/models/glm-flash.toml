@@ -15,7 +15,7 @@ port = 8001
 context_size = 131072
 max_output = 16384
 reasoning = "on"
-reasoning_effort = "high"
+reasoning_effort = "max"
 temperature = 1.0
 top_p = 0.95
 top_k = 0
@@ -35,3 +35,4 @@ mem = "256G"
 [capabilities]
 tools = true
 responses = true
+reasoning_efforts = ["low", "high", "max"]

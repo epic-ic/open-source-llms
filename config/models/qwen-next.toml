@@ -34,3 +34,4 @@ mem = "128G"
 [capabilities]
 tools = true
 responses = true
+reasoning_efforts = ["low", "medium", "xhigh"]

@@ -48,6 +48,11 @@ class ConfigTests(unittest.TestCase):
     def test_capabilities_are_opt_in(self):
         self.assertEqual(profile().capabilities, {"tools": False, "responses": False})
 
+    def test_invalid_reasoning_efforts_fail(self):
+        for efforts in ("high", ["low", "low"], [""], [1]):
+            with self.subTest(efforts=efforts), self.assertRaises(ConfigError):
+                profile(capabilities={"reasoning_efforts": efforts})
+
     def test_flags_override_environment_and_cluster_policy(self):
         original = profile(server={"port": 8001}, slurm={"gpus": 2})
         with patch.dict(os.environ, {"LLM_PORT": "9000", "LLM_REASONING": "true"}, clear=True):

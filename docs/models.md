@@ -71,7 +71,7 @@ every quantization in a repository.
 | `[server]` | `host`, `port`, `context_size`, `parallel`, `max_output`, `extra_args` |
 | `[server]`, llama.cpp | `gpu_layers`, `reasoning`, `reasoning_effort`, `temperature`, `top_p`, `top_k`, `min_p`, `presence_penalty`, `repeat_penalty`, `split_mode`, `tensor_split`, `lazy_mode`, `cache_type_k`, `cache_type_v`, `flash_attn` |
 | `[slurm]` | `gpus`, `cpus_per_task`, `mem`, `time`, `partition`, `account`, `nodelist`, `constraint`, `gpu_type`, `qos` |
-| `[capabilities]` | `tools`, `responses` (both default to `false`) |
+| `[capabilities]` | `tools`, `responses` (both default to `false`), optional `reasoning_efforts` |
 | `[scripts]`, script backend | `serve`, optional `prepare` |
 
 `reasoning` accepts `on`, `off`, or `auto`. Reasoning effort, sampling, cache types,
@@ -80,6 +80,11 @@ settings use the engine defaults; no Qwen-specific sampling is applied globally.
 Changing reasoning does not automatically change sampling—put appropriate values
 in the profile. Backend-specific additions go in `extra_args`, as separate argv
 items, e.g. `["--chat-template-file", "templates/my-model.jinja"]`.
+
+`reasoning_efforts` lists the per-request effort levels the model accepts, e.g.
+`["low", "medium", "high"]`. Generated OpenCode configs offer exactly these as
+model variants; the default variant sends no effort, so `server.reasoning_effort`
+applies. Omit it to keep OpenCode's built-in variants, or set `[]` to offer none.
 
 For llama.cpp, `context_size` is the total context shared across `parallel` slots.
 Clients are configured with `floor(context_size / parallel)` and output must be

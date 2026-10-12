@@ -53,7 +53,7 @@ SECTIONS = {
         "gpu_type",
         "qos",
     },
-    "capabilities": {"tools", "responses"},
+    "capabilities": {"tools", "responses", "reasoning_efforts"},
     "scripts": {"prepare", "serve"},
 }
 SERVER_DEFAULTS = {
@@ -195,9 +195,15 @@ class Profile:
                 not isinstance(value, str) or not value.strip() or "\n" in value
             ):
                 raise ConfigError(f"slurm.{key} must be a nonempty string without newlines")
-        for key, value in self.capabilities.items():
-            if type(value) is not bool:
+        for key in ("tools", "responses"):
+            if type(self.capabilities[key]) is not bool:
                 raise ConfigError(f"capabilities.{key} must be true or false")
+        if "reasoning_efforts" in self.capabilities:
+            efforts = strings(
+                self.capabilities["reasoning_efforts"], "capabilities.reasoning_efforts"
+            )
+            if any(not effort.strip() for effort in efforts) or len(set(efforts)) != len(efforts):
+                raise ConfigError("capabilities.reasoning_efforts must be unique nonempty strings")
         for key, value in self.scripts.items():
             if not isinstance(value, str):
                 raise ConfigError(f"scripts.{key} must be a path string")
@@ -237,7 +243,7 @@ class Profile:
         return self.data["slurm"]
 
     @property
-    def capabilities(self) -> dict[str, bool]:
+    def capabilities(self) -> dict[str, Any]:
         return self.data["capabilities"]
 
     @property

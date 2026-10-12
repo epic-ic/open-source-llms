@@ -32,6 +32,27 @@ class IntegrationTests(unittest.TestCase):
             model["capabilities"], {"tools": True, "input": ["text"], "output": ["text"]}
         )
 
+    def test_opencode_omits_variants_without_declared_efforts(self):
+        data = json.loads(opencode(self.profile, "http://localhost:9999/v1"))
+        self.assertNotIn("variants", data["providers"]["slurm-my-model"]["models"]["org/model"])
+
+    def test_opencode_variants_follow_declared_efforts(self):
+        self.profile.capabilities["reasoning_efforts"] = ["low", "max"]
+        data = json.loads(opencode(self.profile, "http://localhost:9999/v1"))
+        model = data["providers"]["slurm-my-model"]["models"]["org/model"]
+        self.assertEqual(
+            model["variants"],
+            [
+                {"id": "low", "settings": {"reasoningEffort": "low"}},
+                {"id": "max", "settings": {"reasoningEffort": "max"}},
+            ],
+        )
+
+    def test_opencode_empty_efforts_disable_variants(self):
+        self.profile.capabilities["reasoning_efforts"] = []
+        data = json.loads(opencode(self.profile, "http://localhost:9999/v1"))
+        self.assertEqual(data["providers"]["slurm-my-model"]["models"]["org/model"]["variants"], [])
+
     def test_codex_config_is_valid_toml_and_uses_responses(self):
         output = codex(self.profile, "http://localhost:9999/v1")
         data = tomllib.loads(output)

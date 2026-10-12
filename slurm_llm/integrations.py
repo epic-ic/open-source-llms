@@ -35,6 +35,11 @@ def opencode(profile: Profile, base_url: str) -> str:
             "output": ["text"],
         },
     }
+    if "reasoning_efforts" in profile.capabilities:
+        model["variants"] = [
+            {"id": effort, "settings": {"reasoningEffort": effort}}
+            for effort in profile.capabilities["reasoning_efforts"]
+        ]
     config: dict[str, Any] = {
         "$schema": "https://opencode.ai/config.json",
         "model": f"{provider}/{alias}",
@@ -53,9 +58,7 @@ def opencode(profile: Profile, base_url: str) -> str:
 
 def codex(profile: Profile, base_url: str) -> str:
     if not profile.capabilities["responses"] or not profile.capabilities["tools"]:
-        raise ConfigError(
-            "Codex needs tools and Responses support; verify both before enabling capabilities"
-        )
+        raise ConfigError("Codex needs tools and Responses support; verify both before enabling capabilities")
     provider = codex_profile(profile)
     quote = json.dumps
     context = profile.context_per_request
