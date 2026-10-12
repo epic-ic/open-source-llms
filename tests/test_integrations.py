@@ -33,14 +33,18 @@ class IntegrationTests(unittest.TestCase):
         )
 
     def test_codex_config_is_valid_toml_and_uses_responses(self):
-        data = tomllib.loads(codex(self.profile, "http://localhost:9999/v1"))
+        output = codex(self.profile, "http://localhost:9999/v1")
+        data = tomllib.loads(output)
         provider = data["model_providers"]["slurm_my_model"]
         self.assertEqual(provider["env_key"], "LLM_API_KEY")
         self.assertEqual(provider["wire_api"], "responses")
         self.assertFalse(provider["supports_websockets"])
-        profile = data["profiles"]["slurm_my_model"]
-        self.assertEqual(profile["model_context_window"], 16384)
-        self.assertLessEqual(profile["model_auto_compact_token_limit"], 16384 - 4096)
+        self.assertNotIn("profiles", data)
+        self.assertEqual(data["model_provider"], "slurm_my_model")
+        self.assertEqual(data["model"], "org/model")
+        self.assertEqual(data["model_context_window"], 16384)
+        self.assertLessEqual(data["model_auto_compact_token_limit"], 16384 - 4096)
+        self.assertIn("~/.codex/slurm_my_model.config.toml", output)
 
     def test_codex_requires_declared_capabilities(self):
         self.profile.capabilities["responses"] = False

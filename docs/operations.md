@@ -134,7 +134,7 @@ provider/profile IDs are now based on profile filenames.
 
 The existing checkout's gpu8/Blackwell partition settings have been retained in
 an ignored `config/cluster.local.toml`. New clones start from the portable example.
-GLM's original scripted settings are now authoritative: port 8001, 64 CPUs,
+GLM's original scripted settings are now authoritative: port 8001, 32 CPUs,
 256G host RAM, and high reasoning effort. The old README's conflicting port/CPU/
 reasoning descriptions are no longer used.
 

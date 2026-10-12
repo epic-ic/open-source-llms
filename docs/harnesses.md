@@ -48,13 +48,16 @@ Generate a named provider/profile fragment:
 
 ```bash
 uv run llm-config codex my-model --output config/generated/my-model-codex.toml
-# Merge the generated tables into ~/.codex/config.toml on your local machine.
+# Step 1: save the top-level profile keys as ~/.codex/slurm_my_model.config.toml.
+# Step 2: merge the [model_providers.slurm_my_model] table into ~/.codex/config.toml.
 codex --profile slurm_my_model
 ```
 
 The profile ID is `slurm_` plus the model profile's ID with hyphens replaced by
 underscores. Generation does not edit your global Codex configuration or change
-its default model. It requires both `capabilities.tools = true` and
+its default model. Codex 0.134 and later read `--profile` settings from
+`~/.codex/PROFILE.config.toml`, not from a `[profiles]` table in `config.toml`.
+It requires both `capabilities.tools = true` and
 `capabilities.responses = true`.
 
 Codex uses the Responses wire API; generated providers select HTTP streaming,

@@ -60,7 +60,16 @@ def codex(profile: Profile, base_url: str) -> str:
     quote = json.dumps
     context = profile.context_per_request
     compact = min(int(context * 0.75), context - profile.server["max_output"])
-    return f'''# Merge into ~/.codex/config.toml. Start: codex --profile {provider}
+    return f'''# Step 1: save the keys below as ~/.codex/{provider}.config.toml. Codex 0.134
+# and later read --profile settings from that file, not from a [profiles] table
+# in config.toml.
+model_provider = "{provider}"
+model = {quote(profile.model["alias"])}
+model_context_window = {context}
+model_auto_compact_token_limit = {compact}
+
+# Step 2: merge the table below into ~/.codex/config.toml.
+# Then start with: codex --profile {provider}
 [model_providers.{provider}]
 name = {quote(profile.model["name"] + " on Slurm")}
 base_url = {quote(validate_base_url(base_url))}
@@ -69,12 +78,6 @@ wire_api = "responses"
 requires_openai_auth = false
 supports_websockets = false
 stream_idle_timeout_ms = 300000
-
-[profiles.{provider}]
-model_provider = "{provider}"
-model = {quote(profile.model["alias"])}
-model_context_window = {context}
-model_auto_compact_token_limit = {compact}
 '''
 
 

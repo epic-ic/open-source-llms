@@ -79,18 +79,18 @@ uv run llm-prepare glm-flash
 uv run llm-submit glm-flash --test-only
 ```
 
-| Command | Purpose |
-| --- | --- |
-| `uv run llm-list` | List model profiles in the checkout |
-| `uv run llm-init` | Create a model profile |
-| `uv run llm-prepare` | Prepare runtime, weights, and authentication |
-| `uv run llm-submit` | Preview, validate, or submit a Slurm job |
-| `uv run llm-serve` | Serve within an allocation or directly on a compute node |
-| `uv run llm-tunnel` | Print or start an SSH tunnel |
-| `uv run llm-config` | Generate OpenCode/Codex configuration or environment commands |
-| `uv run llm-health` | Check endpoint readiness |
-| `uv run llm-models` | List models served by the endpoint |
-| `uv run llm-chat` | Send a prompt, optionally streaming |
+| Command              | Purpose                                                       |
+| -------------------- | ------------------------------------------------------------- |
+| `uv run llm-list`    | List model profiles in the checkout                           |
+| `uv run llm-init`    | Create a model profile                                        |
+| `uv run llm-prepare` | Prepare runtime, weights, and authentication                  |
+| `uv run llm-submit`  | Preview, validate, or submit a Slurm job                      |
+| `uv run llm-serve`   | Serve within an allocation or directly on a compute node      |
+| `uv run llm-tunnel`  | Print or start an SSH tunnel                                  |
+| `uv run llm-config`  | Generate OpenCode/Codex configuration or environment commands |
+| `uv run llm-health`  | Check endpoint readiness                                      |
+| `uv run llm-models`  | List models served by the endpoint                            |
+| `uv run llm-chat`    | Send a prompt, optionally streaming                           |
 
 `uv run` uses the project's environment and keeps it synchronized with `uv.lock`.
 You do not need to activate the environment. Use `uv run llm-chat --help` (or any
@@ -153,7 +153,8 @@ OpenCode integration supports only version 2.x; check `opencode --version` first
 # OpenCode 2.x.
 uv run llm-config opencode my-model --output /PATH/TO/YOUR/PROJECT/opencode.json
 
-# Codex: generate a fragment, then merge it into your local ~/.codex/config.toml.
+# Codex: merge the provider table into ~/.codex/config.toml and save the
+# remaining profile keys as ~/.codex/slurm_my_model.config.toml.
 uv run llm-config codex my-model --output config/generated/my-model-codex.toml
 codex --profile slurm_my_model
 ```
@@ -170,11 +171,11 @@ These preserve the original model choices and resource requests. Resource sizes
 are starting configurations; choose weights and context that fit your hardware.
 Tracked profiles have no fixed cluster node, account, partition, or GPU type.
 
-| Profile | API model | GPUs | CPUs | Host RAM | Context / output | Port |
-| --- | --- | ---: | ---: | --- | --- | ---: |
-| `qwen-27b` | `qwen3.8-27b` | 1 | 8 | 96G | 32768 / 8192 | 8000 |
-| `qwen-next` | `qwen3.8-flash-next` | 4 | 16 | 128G | 32768 / 8192 | 8000 |
-| `glm-flash` | `glm-5.3-flash` | 5 | 64 | 256G | 131072 / 16384 | 8001 |
+| Profile     | API model            |
+| ----------- | -------------------- |
+| `qwen-27b`  | `qwen3.8-27b`        |
+| `qwen-next` | `qwen3.8-flash-next` |
+| `glm-flash` | `glm-5.3-flash`      |
 
 Shared runtime downloads remain pinned to llama.cpp `b11472` with CUDA 12.8 and
 verified SHA-256 hashes. Those binaries require Linux x86_64 and a compatible
