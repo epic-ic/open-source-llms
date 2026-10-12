@@ -4,10 +4,10 @@ import json
 import os
 import tempfile
 import unittest
+from importlib import import_module
 from pathlib import Path
 from unittest.mock import patch
 
-from slurm_llm.cli import main
 from slurm_llm.config import Profile, load_profile
 from slurm_llm.credentials import ensure_key
 from slurm_llm.slurm import read_snapshot, snapshot
@@ -24,10 +24,11 @@ class CLITests(unittest.TestCase):
         self.env.start()
         self.addCleanup(self.env.stop)
 
-    def invoke(self, *args, root=None):
+    def invoke(self, command, *args, root=None):
         output, error = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
-            status = main(["--root", str(root or self.root), *args])
+            entry_point = import_module(f"slurm_llm.commands.{command}").main
+            status = entry_point(["--root", str(root or self.root), *args])
         return status, output.getvalue(), error.getvalue()
 
     def test_init_new_model_and_generate_harness_without_weights(self):

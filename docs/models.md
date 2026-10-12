@@ -3,15 +3,15 @@
 A model is a file in `config/models/ID.toml`. Its filename is the profile ID;
 `model.alias` is the identifier sent over the API. IDs use lowercase letters,
 digits, underscores, and hyphens. Commands also accept a TOML path, such as
-`llm prepare examples/gguf-model.toml` after editing that template.
+`uv run llm-prepare examples/gguf-model.toml` after editing that template.
 
 ## GGUF models
 
-Create a profile with `llm init`, or copy [the GGUF template](../examples/gguf-model.toml).
+Create a profile with `uv run llm-init`, or copy [the GGUF template](../examples/gguf-model.toml).
 The runtime handles any supported GGUF architecture, regardless of model family.
 
 ```bash
-llm init my-model --repo ORG/MODEL-GGUF --file QUANT/model-00001-of-00004.gguf
+uv run llm-init my-model --repo ORG/MODEL-GGUF --file QUANT/model-00001-of-00004.gguf
 ```
 
 The generated download pattern includes all four shards. Preparation validates
@@ -21,7 +21,7 @@ entry point. Missing or ambiguous entry points fail before submission.
 Alternatively, use a local file:
 
 ```bash
-llm init my-model --model-file /SHARED/STORAGE/model.gguf
+uv run llm-init my-model --model-file /SHARED/STORAGE/model.gguf
 ```
 
 The minimal local profile is:
@@ -55,7 +55,7 @@ entrypoint = "{quant}/*-00001-of-*.gguf"
 `directory` is relative to the repository; `include` and `entrypoint` are relative
 to that directory. `include` selects files on Hugging Face and `entrypoint` must
 match exactly one local GGUF. For a single file, use its filename in both fields.
-`{quant}` is optional; `llm prepare my-model --quant Q5_K_M` changes the recorded
+`{quant}` is optional; `uv run llm-prepare my-model --quant Q5_K_M` changes the recorded
 weights for the next submission. A failed preparation leaves the previous
 recorded entry point intact. Use a commit ID in `revision` for reproducible weights.
 
@@ -96,9 +96,9 @@ Cluster settings override profile resource suggestions, and submission flags
 have highest priority:
 
 ```bash
-llm submit my-model --gpus 2 --cpus-per-task 16 --mem 128G \
+uv run llm-submit my-model --gpus 2 --cpus-per-task 16 --mem 128G \
   --partition gpu --account project --time 04:00:00
-llm submit my-model --port 9000 --context-size 16384 --parallel 2 --max-output 4096
+uv run llm-submit my-model --port 9000 --context-size 16384 --parallel 2 --max-output 4096
 ```
 
 Supported server environment overrides are `LLM_HOST`, `LLM_PORT`, `LLM_CTX_SIZE`,
@@ -114,7 +114,7 @@ server environment changes.
 Copy [the script template](../examples/script-model.toml) or run:
 
 ```bash
-llm init my-model --backend script --repo ORG/MODEL \
+uv run llm-init my-model --backend script --repo ORG/MODEL \
   --serve-script scripts/models/serve-my-model.sh \
   --prepare-script scripts/models/prepare-my-model.sh
 ```
@@ -122,7 +122,7 @@ llm init my-model --backend script --repo ORG/MODEL \
 Both scripts are Bash files relative to the repository root. Preparation runs on
 the login node; serving runs through `srun` on the allocated compute node. Set up
 large downloads or Python environments in the preparation script, avoiding
-repeated setup in every allocation. `scripts.prepare` is optional; `llm prepare`
+repeated setup in every allocation. `scripts.prepare` is optional; `uv run llm-prepare`
 always ensures the key file exists after preparation. GGUF-specific preparation
 flags do not apply to script profiles.
 
@@ -155,5 +155,5 @@ parsers in `extra_args` for the selected model. See the official
 The adapter is an extension example; the repository does not install vLLM.
 
 For another agent harness, add a pure config renderer in
-`slurm_llm/integrations.py` and expose it in `slurm_llm/cli.py`. Keep aliases,
+`slurm_llm/integrations.py` and expose it in `slurm_llm/commands/config.py`. Keep aliases,
 endpoints, token budgets, and credentials derived from the same profile.

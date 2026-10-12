@@ -6,10 +6,13 @@ import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from unittest.mock import patch
 
-from slurm_llm.cli import main
 from slurm_llm.client import APIError, Client, chat_body, response_text, validate_base_url
+from slurm_llm.commands.chat import main
+from slurm_llm.commands.health import main as health_main
+from slurm_llm.commands.models import main as models_main
 from slurm_llm.config import ConfigError
 
 
@@ -146,7 +149,6 @@ class ClientTests(unittest.TestCase):
                     [
                         "--root",
                         directory,
-                        "chat",
                         "hello",
                         "--base-url",
                         self.url,
@@ -159,6 +161,29 @@ class ClientTests(unittest.TestCase):
 
     def test_health_does_not_require_authentication(self):
         Client(self.url).health()
+
+    def test_health_entry_point_does_not_need_a_key_file(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {}, clear=True),
+            contextlib.redirect_stdout(io.StringIO()) as output,
+        ):
+            status = health_main(["--root", directory, "--base-url", self.url])
+        self.assertEqual(status, 0)
+        self.assertEqual(output.getvalue(), "Ready\n")
+
+    def test_models_entry_point_reads_the_project_secret_by_default(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {}, clear=True),
+            contextlib.redirect_stdout(io.StringIO()) as output,
+        ):
+            key_file = Path(directory) / ".secrets" / "llm-api-key"
+            key_file.parent.mkdir()
+            key_file.write_text("test-key\n")
+            status = models_main(["--root", directory, "--base-url", self.url])
+        self.assertEqual(status, 0)
+        self.assertEqual(json.loads(output.getvalue())["data"][0]["id"], "test-model")
 
     def test_loading_status_does_not_report_ready(self):
         self.server.health_status = 503

@@ -19,7 +19,9 @@ def runtime_command(root: Path, override: str | None = None) -> tuple[Path, dict
     if not executable:
         path = metadata / "server.path"
         if not path.is_file():
-            raise ConfigError("Prepare the runtime with 'llm prepare PROFILE' or set LLAMA_SERVER")
+            raise ConfigError(
+                "Prepare the runtime with 'uv run llm-prepare PROFILE' or set LLAMA_SERVER"
+            )
         executable = path.read_text().strip()
     server = resolve_path(root, executable)
     if not server.is_file() or not os.access(server, os.X_OK):

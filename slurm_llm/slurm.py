@@ -129,7 +129,7 @@ def submit(
     job = result.stdout.strip().split(";")[0]
     if not job.isdigit():
         raise ConfigError(f"Unexpected sbatch output: {result.stdout.strip()}")
-    # Keep stdout usable in job_id=$(llm submit PROFILE).
+    # Keep stdout usable in job_id=$(uv run llm-submit PROFILE).
     print(job)
     print(f"Log: {root / 'logs' / f'{profile.id}-{job}.log'}", file=sys.stderr)
     print(f"Snapshot: {path}", file=sys.stderr)
@@ -150,7 +150,9 @@ def serve(
         print(shlex.join(command if local else ["srun", *command]))
         return
     if not local and not os.getenv("SLURM_JOB_ID"):
-        raise ConfigError("Use 'llm submit PROFILE', or pass --local inside an existing allocation")
+        raise ConfigError(
+            "Use 'uv run llm-submit PROFILE', or pass --local inside an existing allocation"
+        )
     host = socket.getfqdn()
     print(
         f"Job {os.getenv('SLURM_JOB_ID', 'local')}; host {host}; model {profile.model['alias']}; "
@@ -158,7 +160,8 @@ def serve(
         flush=True,
     )
     print(
-        f"Connect: llm tunnel {profile.id} --compute-host {host} --login USER@HEADNODE", flush=True
+        f"Connect: uv run llm-tunnel {profile.id} --compute-host {host} --login USER@HEADNODE",
+        flush=True,
     )
     print("The API is ready when /health returns HTTP 200.", flush=True)
     os.chdir(root)

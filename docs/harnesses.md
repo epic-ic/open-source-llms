@@ -1,17 +1,19 @@
 # Harnesses and API clients
 
 Run the agent on your local code project, with an SSH tunnel to the Slurm server.
-All integrations use `LLM_API_KEY`. Load it from the privately copied server key:
+All integrations use `LLM_API_KEY`. Copy the server key to
+`.secrets/llm-api-key` in your local checkout as shown in the README; that directory
+is ignored by Git. Load it before starting the harness:
 
 ```bash
-export LLM_API_KEY_FILE="$HOME/.config/slurm-llm/api-key"
+export LLM_API_KEY_FILE="$PWD/.secrets/llm-api-key"
 export LLM_API_KEY="$(cat "$LLM_API_KEY_FILE")"
 ```
 
 Generate environment commands if you also want the alias and base URL:
 
 ```bash
-llm config env my-model --api-key-file "$LLM_API_KEY_FILE"
+uv run llm-config env my-model --api-key-file "$LLM_API_KEY_FILE"
 # Review and evaluate that output, or save it with --output and source the file.
 ```
 
@@ -24,7 +26,7 @@ Check `opencode --version` and generate the matching format:
 
 ```bash
 # Run from your local checkout; target the code project the agent should edit.
-llm config opencode my-model --opencode-version 2 \
+uv run llm-config opencode my-model --opencode-version 2 \
   --output /PATH/TO/CODE/PROJECT/opencode.json
 # For OpenCode 1.x, use --opencode-version 1.
 
@@ -44,7 +46,7 @@ and [2.x](https://opencode.ai/v2/docs/providers) provider documentation.
 Generate a named provider/profile fragment:
 
 ```bash
-llm config codex my-model --output config/generated/my-model-codex.toml
+uv run llm-config codex my-model --output config/generated/my-model-codex.toml
 # Merge the generated tables into ~/.codex/config.toml on your local machine.
 codex --profile slurm_my_model
 ```
@@ -72,14 +74,14 @@ If you override context or port during submission, generate configs with those
 same flags. Alternatively use the job snapshot path printed during submission:
 
 ```bash
-llm config opencode --job-config .tools/jobs/my-model-SNAPSHOT_ID.json \
+uv run llm-config opencode --job-config .tools/jobs/my-model-SNAPSHOT_ID.json \
   --base-url http://127.0.0.1:9000/v1 --output config/generated/opencode.json
-llm config codex --job-config .tools/jobs/my-model-SNAPSHOT_ID.json
+uv run llm-config codex --job-config .tools/jobs/my-model-SNAPSHOT_ID.json
 ```
 
 Snapshots include the model/resource settings and credential file path, never
 the key itself. When using a snapshot copied to your laptop, override
-`--api-key-file` for `config env` or API client commands to point to the local key.
+`--api-key-file` for `uv run llm-config env` or API client commands to point to the local key.
 
 ## Python CLI and curl
 
@@ -87,11 +89,11 @@ The client can discover the model when the endpoint serves exactly one model:
 
 ```bash
 export LLM_BASE_URL=http://127.0.0.1:8000/v1
-llm models
-llm chat "Say hello."
-llm chat --model my-model --stream "Write a short Python function."
-llm chat --responses --stream "Explain this server in one sentence."
-printf '%s\n' 'Summarize this text.' | llm chat -
+uv run llm-models
+uv run llm-chat "Say hello."
+uv run llm-chat --model my-model --stream "Write a short Python function."
+uv run llm-chat --responses --stream "Explain this server in one sentence."
+printf '%s\n' 'Summarize this text.' | uv run llm-chat -
 ```
 
 `--profile my-model` selects its port, alias, and output budget. `--model` overrides
@@ -100,7 +102,7 @@ override. Key selection is explicit `--api-key-file`, then `LLM_API_KEY`, then
 `LLM_API_KEY_FILE` or `.secrets/llm-api-key`. Health needs no authentication:
 
 ```bash
-llm health --profile my-model --wait 300
+uv run llm-health --profile my-model --wait 300
 curl --fail-with-body "$LLM_BASE_URL/models" -H "Authorization: Bearer $LLM_API_KEY"
 curl -N --fail-with-body "$LLM_BASE_URL/chat/completions" \
   -H "Authorization: Bearer $LLM_API_KEY" -H 'Content-Type: application/json' \
@@ -126,7 +128,7 @@ The SDK is optional; the repository CLI uses only the standard library.
 ## Validate an agent setup
 
 After readiness and model discovery succeed, make one streamed chat request.
-For Codex, also test `llm chat --profile my-model --responses --stream "Say ready"`.
+For Codex, also test `uv run llm-chat --profile my-model --responses --stream "Say ready"`.
 Then ask the harness to read a small local file and report its contents. Confirm
 that the tool call executes and that the model consumes the tool result. API
 availability alone does not establish tool-call compatibility. Model templates,

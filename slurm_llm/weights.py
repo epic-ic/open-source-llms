@@ -56,7 +56,7 @@ def hf_command() -> list[str]:
         return ["hf"]
     if shutil.which("uvx"):
         return ["uvx", "--from", "huggingface_hub", "hf"]
-    raise ConfigError("Install the Hugging Face CLI (pip install huggingface_hub) or install uv")
+    raise ConfigError("Install uv to run the Hugging Face CLI through uvx")
 
 
 def prepare_weights(root: Path, profile: Profile, quant: str | None = None) -> Path:

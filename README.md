@@ -11,11 +11,16 @@ engines, with a vLLM example included.
 ## Quick start
 
 Run these commands from a checkout on storage shared by the login and compute
-nodes. Python 3.12+ is required. Preparation also needs `curl` and either the
-[Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli) or `uv`
-(the command automatically uses `uvx` when `hf` is unavailable).
+nodes. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and
+ensure `curl` is available for preparation. Run `uv sync` in the checkout to
+create `.venv` and install the command entry points and development tools.
+Standalone checkouts pin Python 3.12; uv can download it if unavailable locally.
+Weights use the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli),
+launched through `uvx` when `hf` is unavailable.
 
 ```bash
+uv sync
+
 # 1. Configure this cluster once; edit the local copy for your partition/account.
 if [ ! -f config/cluster.local.toml ]; then
   cp config/cluster.example.toml config/cluster.local.toml
@@ -23,12 +28,12 @@ fi
 # Edit config/cluster.local.toml for this cluster.
 
 # 2. Choose a profile and prepare it.
-python3 main.py list
-python3 main.py prepare qwen-27b
+uv run llm-list
+uv run llm-prepare qwen-27b
 
 # 3. Preview, then submit.
-python3 main.py submit qwen-27b --dry-run
-job_id=$(python3 main.py submit qwen-27b)
+uv run llm-submit qwen-27b --dry-run
+job_id=$(uv run llm-submit qwen-27b)
 squeue -j "$job_id"
 tail -f "logs/qwen-27b-$job_id.log"
 ```
@@ -37,73 +42,103 @@ The job log reports the compute node's DNS hostname and server port. On your
 laptop, use a checkout to create a tunnel (replace the placeholders):
 
 ```bash
-python3 main.py tunnel qwen-27b \
+uv run llm-tunnel qwen-27b \
   --login USER@HEADNODE --compute-host COMPUTE_HOST --execute
 ```
 
-Keep that terminal open. Copy `.secrets/llm-api-key` from the cluster to a private
-local file, then use it from another local terminal:
+Keep that terminal open. In your local checkout, copy the cluster key to
+`.secrets/llm-api-key`, which this repository ignores in Git. Then use it
+from another local terminal:
 
 ```bash
-mkdir -p "$HOME/.config/slurm-llm"
-chmod 700 "$HOME/.config/slurm-llm"
-scp USER@HEADNODE:/PATH/TO/llms/.secrets/llm-api-key "$HOME/.config/slurm-llm/api-key"
-chmod 600 "$HOME/.config/slurm-llm/api-key"
-export LLM_API_KEY_FILE="$HOME/.config/slurm-llm/api-key"
+mkdir -p .secrets
+chmod 700 .secrets
+scp USER@HEADNODE:/PATH/TO/llms/.secrets/llm-api-key .secrets/llm-api-key
+chmod 600 .secrets/llm-api-key
+export LLM_API_KEY_FILE="$PWD/.secrets/llm-api-key"
 export LLM_API_KEY="$(cat "$LLM_API_KEY_FILE")"
 
-python3 main.py health --profile qwen-27b --wait 300
-python3 main.py models --profile qwen-27b
-python3 main.py chat --profile qwen-27b "Explain Slurm in three sentences."
+uv run llm-health --profile qwen-27b --wait 300
+uv run llm-models --profile qwen-27b
+uv run llm-chat --profile qwen-27b "Explain Slurm in three sentences."
 ```
 
 Stop the allocation on the login node when finished: `scancel "$job_id"`.
 Preparation retains existing API keys and downloads. No model download or GPU
 allocation happens when listing profiles or generating configs.
 
-## Use the shorter `llm` command
+## Independent commands
 
-The CLI itself has no third-party Python dependencies. Install it in a shared
-virtual environment if you prefer `llm` to `python3 main.py`:
+Each operation has its own executable and Python module. Use uv to install and
+run the commands in the project environment:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -e .
-llm list
-llm prepare glm-flash
-llm submit glm-flash --test-only
+uv sync
+uv run llm-list
+uv run llm-prepare glm-flash
+uv run llm-submit glm-flash --test-only
 ```
 
-Every example using `llm` also works with `python3 main.py` or
-`python3 -m slurm_llm`. From another directory, pass `llm --root /PATH/TO/llms …`
-or set `LLM_ROOT`. Keep the checkout and the chosen Python interpreter visible
-to compute nodes; submissions record that interpreter's absolute path.
+| Command | Purpose |
+| --- | --- |
+| `uv run llm-list` | List model profiles in the checkout |
+| `uv run llm-init` | Create a model profile |
+| `uv run llm-prepare` | Prepare runtime, weights, and authentication |
+| `uv run llm-submit` | Preview, validate, or submit a Slurm job |
+| `uv run llm-serve` | Serve within an allocation or directly on a compute node |
+| `uv run llm-tunnel` | Print or start an SSH tunnel |
+| `uv run llm-config` | Generate OpenCode/Codex configuration or environment commands |
+| `uv run llm-health` | Check endpoint readiness |
+| `uv run llm-models` | List models served by the endpoint |
+| `uv run llm-chat` | Send a prompt, optionally streaming |
+
+`uv run` uses the project's environment and keeps it synchronized with `uv.lock`.
+You do not need to activate the environment. Use `uv run llm-chat --help` (or any
+other command) for its options. See [uv's project workflow](https://docs.astral.sh/uv/guides/projects/).
+
+From another directory, select both the uv project and the model checkout:
+
+```bash
+uv run --project /PATH/TO/llms llm-submit \
+  --root /PATH/TO/llms my-model --dry-run
+```
+
+`--project` selects uv's environment; `--root` selects profiles and model assets.
+You can set `LLM_ROOT` instead of passing `--root`. Keep the checkout and `.venv`
+visible to compute nodes. Submission records the uv environment's Python
+interpreter, which the batch wrapper invokes directly with the frozen job settings.
+Sync the environment on the login node before submission.
+
+If the checkout is a member of a parent uv workspace, uv uses that workspace's
+environment, lockfile, and Python constraints. This cluster checkout belongs to
+the parent `code` workspace, which currently selects Python 3.15. The same
+`uv sync` and `uv run llm-*` commands work there. See
+[uv workspaces](https://docs.astral.sh/uv/concepts/projects/workspaces/).
 
 ## Add a model
 
 For any GGUF supported by your llama.cpp version:
 
 ```bash
-llm init my-model --repo ORG/MODEL-GGUF --file model-Q4_K_M.gguf
+uv run llm-init my-model --repo ORG/MODEL-GGUF --file model-Q4_K_M.gguf
 # Edit config/models/my-model.toml: resources, context, sampling, capabilities.
-llm prepare my-model
-llm submit my-model
+uv run llm-prepare my-model
+uv run llm-submit my-model
 ```
 
 For a split GGUF, give `--file` the first shard; initialization selects all shards
-for download. For existing weights, use `llm init my-model --model-file /PATH/model.gguf`.
+for download. For existing weights, use `uv run llm-init my-model --model-file /PATH/model.gguf`.
 No model-specific Python or Slurm script is needed.
 
 For another serving engine:
 
 ```bash
-llm init my-model --backend script --repo ORG/MODEL \
+uv run llm-init my-model --backend script --repo ORG/MODEL \
   --serve-script examples/backends/vllm.sh
 # Install a suitable vLLM environment and set VLLM_BIN to its executable.
 # Edit the profile and add model-specific engine options.
-llm prepare my-model
-llm submit my-model
+uv run llm-prepare my-model
+uv run llm-submit my-model
 ```
 
 You can supply your own Bash preparation and serving scripts. See
@@ -115,10 +150,10 @@ Configs are generated from your model's alias, endpoint, capabilities, and conte
 
 ```bash
 # OpenCode 2.x; use --opencode-version 1 for 1.x.
-llm config opencode my-model --output /PATH/TO/YOUR/PROJECT/opencode.json
+uv run llm-config opencode my-model --output /PATH/TO/YOUR/PROJECT/opencode.json
 
 # Codex: generate a fragment, then merge it into your local ~/.codex/config.toml.
-llm config codex my-model --output config/generated/my-model-codex.toml
+uv run llm-config codex my-model --output config/generated/my-model-codex.toml
 codex --profile slurm_my_model
 ```
 
@@ -149,11 +184,13 @@ NVIDIA driver. Set `LLAMA_SERVER=/PATH/llama-server` to use your own build.
 ```text
 config/models/         Model profiles: weights, resources, server options, capabilities
 config/runtime.toml    Shared runtime release and checksums
+uv.lock, .python-version  Locked project dependencies and Python version
 config/cluster.local.toml  Your cluster settings (ignored by Git)
 slurm_llm/             Configuration, preparation, backends, Slurm, clients, integrations
+slurm_llm/commands/    Independent command parsers, handlers, and entry points
 slurm/serve.sbatch      One batch entry point for every model
 examples/              GGUF/script profile templates and a vLLM adapter
-scripts/prepare.sh     Optional Bash wrapper for `llm prepare PROFILE`
+scripts/prepare.sh     Optional Bash wrapper for `uv run llm-prepare PROFILE`
 docs/                  Model extension, harness setup, operations, and migration
 tests/                 Unit and local HTTP integration tests
 models/, .tools/       Downloaded weights, runtime, prepared paths, job snapshots (ignored)
@@ -163,9 +200,9 @@ models/, .tools/       Downloaded weights, runtime, prepared paths, job snapshot
 Development checks:
 
 ```bash
-python3 -m unittest discover -s tests -v
-uvx ruff check .
-uvx ruff format --check .
+uv run python -m unittest discover -s tests -v
+uv run ruff check .
+uv run ruff format --check .
 bash -n scripts/prepare.sh slurm/serve.sbatch examples/backends/vllm.sh
 ```
 

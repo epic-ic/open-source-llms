@@ -3,6 +3,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -144,3 +145,42 @@ class LaunchTests(unittest.TestCase):
         ):
             submit(self.root, self.profile, self.key, executable=str(self.binary))
         self.assertEqual(list((self.root / ".tools" / "jobs").glob("*.json")), [])
+
+    def test_batch_wrapper_uses_the_serve_entry_point_and_frozen_settings(self):
+        checkout = Path(__file__).resolve().parents[1]
+        backend = self.root / "serve.sh"
+        backend.write_text('#!/bin/bash\nprintf "backend port=%s\\n" "$LLM_PORT"\n')
+        profile = Profile(
+            "batch-test",
+            {
+                "model": {"backend": "script"},
+                "scripts": {"serve": "serve.sh"},
+                "server": {"port": 9876},
+            },
+        )
+        job = self.root / "job.json"
+        job.write_text(json.dumps(snapshot(self.root, profile, self.key)))
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        srun = bin_dir / "srun"
+        srun.write_text('#!/bin/bash\nexec "$@"\n')
+        srun.chmod(0o755)
+        result = subprocess.run(
+            [
+                "bash",
+                str(checkout / "slurm" / "serve.sbatch"),
+                str(self.root),
+                str(job),
+                sys.executable,
+            ],
+            env={
+                "PATH": f"{bin_dir}:/usr/bin:/bin",
+                "PYTHONPATH": str(checkout),
+                "SLURM_JOB_ID": "test",
+                "LLM_PORT": "9999",
+            },
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("backend port=9876", result.stdout)

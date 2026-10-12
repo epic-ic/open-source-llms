@@ -5,9 +5,9 @@
 Submit from the login node using storage visible to compute nodes:
 
 ```bash
-llm submit my-model --dry-run     # No writes, key reads, downloads, or scheduler call.
-llm submit my-model --test-only   # Validate with Slurm; do not allocate resources.
-job_id=$(llm submit my-model)
+uv run llm-submit my-model --dry-run     # Preview settings without downloading models or calling Slurm.
+uv run llm-submit my-model --test-only   # Validate with Slurm; do not allocate resources.
+job_id=$(uv run llm-submit my-model)
 squeue -j "$job_id"
 tail -f "logs/my-model-$job_id.log"
 scancel "$job_id"
@@ -26,23 +26,24 @@ Slurm cancellation and exit codes to propagate. For an existing allocation:
 
 ```bash
 # Within an allocation, run the shared server through srun:
-llm serve my-model
+uv run llm-serve my-model
 # On an already allocated compute node, run the backend directly:
-llm serve my-model --local
+uv run llm-serve my-model --local
 # Inspect the resolved server command without starting it:
-llm serve my-model --dry-run
+uv run llm-serve my-model --dry-run
 ```
 
-`serve --dry-run` validates existing model/runtime/key assets. `submit --dry-run`
+`uv run llm-serve --dry-run` validates existing model/runtime/key assets. `uv run llm-submit --dry-run`
 can preview an unprepared profile. Its printed snapshot path is illustrative;
-the command creates no snapshot until an actual submission/check.
+the command creates no snapshot until an actual submission/check. The `uv run`
+wrapper may synchronize the project environment before the preview.
 
 ## Cluster and SSH configuration
 
 Copy `config/cluster.example.toml` to `config/cluster.local.toml` and edit it once.
 Only the local copy is ignored by Git. All `[slurm]` fields available in a model
 profile can also be set there; local cluster values override portable profile
-suggestions. Flags override both. Use `--cluster path.toml` with `submit`/`tunnel`
+suggestions. Flags override both. Use `--cluster path.toml` with `uv run llm-submit`/`uv run llm-tunnel`
 for a different cluster. Omitting partition/account/node/type lets Slurm choose
 its defaults. Requests always use one node and one serving task.
 
@@ -54,9 +55,9 @@ names may differ from DNS names. This mode needs login-to-compute TCP access.
 If compute-node SSH is allowed, bind the server to loopback and use ProxyJump:
 
 ```bash
-llm submit my-model --host 127.0.0.1
+uv run llm-submit my-model --host 127.0.0.1
 # Laptop:
-llm tunnel my-model --host 127.0.0.1 \
+uv run llm-tunnel my-model --host 127.0.0.1 \
   --login USER@HEADNODE --compute-host COMPUTE_HOST --execute
 ```
 
@@ -68,15 +69,15 @@ supply the original server host/port.
 
 ## Preparation and storage
 
-`llm prepare PROFILE` installs the shared runtime once, downloads selected model
+`uv run llm-prepare PROFILE` installs the shared runtime once, downloads selected model
 files with the HF CLI, records the validated GGUF entry point, and ensures a
 private key file. It resumes/reuses downloads through the downloader's cache.
 
 ```bash
-llm prepare my-model --runtime-only
-llm prepare my-model --model-only
-LLAMA_SERVER=/SHARED/bin/llama-server llm prepare my-model
-llm prepare qwen-next --quant UD-Q5_K_XL
+uv run llm-prepare my-model --runtime-only
+uv run llm-prepare my-model --model-only
+LLAMA_SERVER=/SHARED/bin/llama-server uv run llm-prepare my-model
+uv run llm-prepare qwen-next --quant UD-Q5_K_XL
 ```
 
 Runtime archive checksums and extraction filtering are enforced when installing.
@@ -91,6 +92,18 @@ for KV caches and compute buffers; reduce context/concurrency or choose a
 smaller quant when necessary. This repository does not delete cached weights
 or interrupt existing allocations during preparation.
 
+## Migration from the single CLI
+
+The former `llm COMMAND ...`, `python3 main.py COMMAND ...`, and
+`python3 -m slurm_llm COMMAND ...` forms have been replaced by independent commands:
+`uv run llm-COMMAND ...`. Run `uv sync` to install the entry points.
+Each command accepts
+its own `--root` option; no subcommand dispatch is used.
+
+The shared Slurm wrapper runs the serve module directly; job snapshots and model
+profiles keep the same format. Existing queued jobs using that wrapper can still
+load their snapshots.
+
 ## Migration from the original repository
 
 The old duplicated model-specific download scripts, Slurm files, and static
@@ -98,16 +111,16 @@ agent configs have been replaced by profiles and generated configs:
 
 | Old command/config | Replacement |
 | --- | --- |
-| `bash scripts/prepare.sh` | `llm prepare qwen-27b` or `bash scripts/prepare.sh qwen-27b` |
-| `bash scripts/prepare-next.sh [QUANT]` | `llm prepare qwen-next [--quant QUANT]` |
-| `bash scripts/prepare-glm.sh [QUANT]` | `llm prepare glm-flash [--quant QUANT]` |
-| `sbatch slurm/serve.sbatch` | `llm submit qwen-27b` |
-| `sbatch slurm/serve-next.sbatch` | `llm submit qwen-next` |
-| `sbatch slurm/serve-glm.sbatch` | `llm submit glm-flash` |
-| `config/opencode-*.json` | `llm config opencode PROFILE --opencode-version 1\|2` |
-| `config/codex.toml` | `llm config codex PROFILE` |
-| `python3 main.py --models` | `python3 main.py models --profile qwen-27b` |
-| `python3 main.py "PROMPT"` | `python3 main.py chat --profile qwen-27b "PROMPT"` |
+| `bash scripts/prepare.sh` | `uv run llm-prepare qwen-27b` or `bash scripts/prepare.sh qwen-27b` |
+| `bash scripts/prepare-next.sh [QUANT]` | `uv run llm-prepare qwen-next [--quant QUANT]` |
+| `bash scripts/prepare-glm.sh [QUANT]` | `uv run llm-prepare glm-flash [--quant QUANT]` |
+| `sbatch slurm/serve.sbatch` | `uv run llm-submit qwen-27b` |
+| `sbatch slurm/serve-next.sbatch` | `uv run llm-submit qwen-next` |
+| `sbatch slurm/serve-glm.sbatch` | `uv run llm-submit glm-flash` |
+| `config/opencode-*.json` | `uv run llm-config opencode PROFILE --opencode-version 1\|2` |
+| `config/codex.toml` | `uv run llm-config codex PROFILE` |
+| `python3 main.py --models` | `uv run llm-models --profile qwen-27b` |
+| `python3 main.py "PROMPT"` | `uv run llm-chat --profile qwen-27b "PROMPT"` |
 | `QWEN_API_KEY` / `GLM_API_KEY` | `LLM_API_KEY` |
 | `QWEN_BASE_URL` / `QWEN_MODEL` | `LLM_BASE_URL` / `LLM_MODEL` |
 
@@ -115,7 +128,7 @@ Existing files in `models/`, `.tools/llama-cpp/`, and `.secrets/llm-api-key` rem
 usable. The old default downloaded paths are recognized without preparation.
 New quant selections are recorded under `.tools/profiles/PROFILE/model.path`.
 If the old `.tools/qwen-next/model.path` or `.tools/glm-flash/model.path` selected
-a non-default quant, run the new `prepare --quant` command to record that choice,
+a non-default quant, run the new `uv run llm-prepare --quant` command to record that choice,
 or pass `--model-file` explicitly. API aliases remain the same; generated
 provider/profile IDs are now based on profile filenames.
 
@@ -130,21 +143,21 @@ reasoning descriptions are no longer used.
 | Symptom | Check |
 | --- | --- |
 | Job pending | `squeue -j JOB_ID`; inspect partition/account and requested resources |
-| Submission fails | `llm submit PROFILE --test-only`; confirm prepared weights/runtime/key |
+| Submission fails | `uv run llm-submit PROFILE --test-only`; confirm prepared weights/runtime/key |
 | Missing shard | Rerun preparation for the selected quant; retain every GGUF shard |
 | Local connection refused | Tunnel foreground process, actual compute hostname, server port, job log |
-| HTTP 503 | Model still loading; `llm health --profile PROFILE --wait 300` |
+| HTTP 503 | Model still loading; `uv run llm-health --profile PROFILE --wait 300` |
 | HTTP 401 | Load the same key that the server's key file contains |
-| Local port busy | `tunnel --local-port` and client/config `--base-url` |
-| Server port busy | `submit --port`, then regenerate the tunnel and configs |
+| Local port busy | `uv run llm-tunnel --local-port` and client/config `--base-url` |
+| Server port busy | `uv run llm-submit --port`, then regenerate the tunnel and configs |
 | CUDA errors | Compatible NVIDIA driver/runtime and correct `LLAMA_SERVER` library environment |
 | Out of GPU memory | Smaller quant, context, or concurrency; inspect per-GPU usage |
 | Tool/Responses errors | Model template, parser, declared capabilities, actual harness tool loop |
 
 ## Checks
 
-Run `python3 -m unittest discover -s tests -v`, `uvx ruff check .`,
-`uvx ruff format --check .`, and Bash syntax validation from the README.
+Run `uv run python -m unittest discover -s tests -v`, `uv run ruff check .`,
+`uv run ruff format --check .`, and Bash syntax validation from the README.
 Tests use temporary files and a localhost HTTP fixture; they do not download
 weights, require GPUs, or submit jobs. Slurm's `--test-only` validates scheduling
 parameters separately. Live inference, laptop forwarding, and agent tool loops
