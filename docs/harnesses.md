@@ -22,24 +22,25 @@ Any OpenAI-compatible client can use the same base URL, bearer key, and model ID
 
 ## OpenCode
 
-Check `opencode --version` and generate the matching format:
+Only OpenCode 2.x is supported. Check `opencode --version` and install or upgrade
+to 2.x before using the generated config:
 
 ```bash
 # Run from your local checkout; target the code project the agent should edit.
-uv run llm-config opencode my-model --opencode-version 2 \
+uv run llm-config opencode my-model \
   --output /PATH/TO/CODE/PROJECT/opencode.json
-# For OpenCode 1.x, use --opencode-version 1.
 
 cd /PATH/TO/CODE/PROJECT
-opencode --model slurm-my-model/my-model
+opencode
 ```
 
 If `opencode.json` exists, generate to a temporary file and merge its provider
-and model settings. Version 1 uses `provider`/`npm`/`options`; version 2 uses
-`providers`/`package`/`settings`. Both use the Chat Completions compatible runtime.
+and model settings. Generated configs use `providers`/`package`/`settings` and
+the Chat Completions compatible runtime. The config selects the default model
+and reads its credential from `LLM_API_KEY`, so exporting that variable before
+launching `opencode` is sufficient; no `/connect` step is needed.
 The provider ID is `slurm-PROFILE_ID`; the model ID after it is `model.alias`.
-See the official [OpenCode 1.x](https://opencode.ai/docs/providers#custom-provider)
-and [2.x](https://opencode.ai/v2/docs/providers) provider documentation.
+See the official [OpenCode 2.x provider documentation](https://opencode.ai/v2/docs/providers).
 
 ## Codex
 

@@ -23,7 +23,6 @@ def parser() -> argparse.ArgumentParser:
     cli.add_argument("profile", nargs="?")
     cli.add_argument("--job-config", type=Path, help="use the exact submitted settings")
     cli.add_argument("--base-url")
-    cli.add_argument("--opencode-version", type=int, choices=[1, 2], default=2)
     cli.add_argument("--output", type=Path, help="create a new file; stdout by default")
     server_options(cli)
     return cli
@@ -36,7 +35,7 @@ def execute(args: argparse.Namespace) -> None:
     key_file = job[2] if job and not args.api_key_file else key_path(root, args.api_key_file)
     url = base_url(args, profile)
     if args.format == "opencode":
-        content = integrations.opencode(profile, url, version=args.opencode_version)
+        content = integrations.opencode(profile, url)
     elif args.format == "codex":
         content = integrations.codex(profile, url)
     else:

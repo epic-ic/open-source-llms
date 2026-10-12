@@ -146,10 +146,11 @@ You can supply your own Bash preparation and serving scripts. See
 
 ## Connect agent harnesses
 
-Configs are generated from your model's alias, endpoint, capabilities, and context:
+Configs are generated from your model's alias, endpoint, capabilities, and context.
+OpenCode integration supports only version 2.x; check `opencode --version` first.
 
 ```bash
-# OpenCode 2.x; use --opencode-version 1 for 1.x.
+# OpenCode 2.x.
 uv run llm-config opencode my-model --output /PATH/TO/YOUR/PROJECT/opencode.json
 
 # Codex: generate a fragment, then merge it into your local ~/.codex/config.toml.

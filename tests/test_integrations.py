@@ -19,17 +19,18 @@ class IntegrationTests(unittest.TestCase):
             },
         )
 
-    def test_opencode_versions_use_alias_and_context_per_slot(self):
-        for version, key in ((1, "provider"), (2, "providers")):
-            with self.subTest(version=version):
-                data = json.loads(
-                    opencode(self.profile, "http://localhost:9999/v1", version=version)
-                )
-                self.assertEqual(data["model"], "slurm-my-model/org/model")
-                provider = data[key]["slurm-my-model"]
-                self.assertEqual(
-                    provider["models"]["org/model"]["limit"], {"context": 16384, "output": 4096}
-                )
+    def test_opencode_v2_uses_alias_context_per_slot_and_environment_credentials(self):
+        data = json.loads(opencode(self.profile, "http://localhost:9999/v1"))
+        self.assertEqual(data["model"], "slurm-my-model/org/model")
+        provider = data["providers"]["slurm-my-model"]
+        self.assertEqual(provider["env"], ["LLM_API_KEY"])
+        self.assertEqual(provider["package"], "@opencode/ai/providers/openai-compatible")
+        self.assertEqual(provider["settings"], {"baseURL": "http://localhost:9999/v1"})
+        model = provider["models"]["org/model"]
+        self.assertEqual(model["limit"], {"context": 16384, "output": 4096})
+        self.assertEqual(
+            model["capabilities"], {"tools": True, "input": ["text"], "output": ["text"]}
+        )
 
     def test_codex_config_is_valid_toml_and_uses_responses(self):
         data = tomllib.loads(codex(self.profile, "http://localhost:9999/v1"))

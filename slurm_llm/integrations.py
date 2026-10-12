@@ -19,7 +19,8 @@ def codex_profile(profile: Profile) -> str:
     return f"slurm_{profile.id.replace('-', '_')}"
 
 
-def opencode(profile: Profile, base_url: str, *, version: int = 2) -> str:
+def opencode(profile: Profile, base_url: str) -> str:
+    """Generate an OpenCode v2 configuration."""
     provider = provider_id(profile)
     alias = profile.model["alias"]
     model = {
@@ -28,47 +29,25 @@ def opencode(profile: Profile, base_url: str, *, version: int = 2) -> str:
             "context": profile.context_per_request,
             "output": profile.server["max_output"],
         },
+        "capabilities": {
+            "tools": profile.capabilities["tools"],
+            "input": ["text"],
+            "output": ["text"],
+        },
     }
     config: dict[str, Any] = {
         "$schema": "https://opencode.ai/config.json",
         "model": f"{provider}/{alias}",
-    }
-    if version == 1:
-        model["tool_call"] = profile.capabilities["tools"]
-        config.update(
-            {
-                "small_model": f"{provider}/{alias}",
-                "share": "disabled",
-                "provider": {
-                    provider: {
-                        "name": profile.model["name"] + " on Slurm",
-                        "npm": "@ai-sdk/openai-compatible",
-                        "options": {
-                            "baseURL": validate_base_url(base_url),
-                            "apiKey": "{env:LLM_API_KEY}",
-                        },
-                        "models": {alias: model},
-                    },
-                },
-            }
-        )
-    elif version == 2:
-        model["capabilities"] = {
-            "tools": profile.capabilities["tools"],
-            "input": ["text"],
-            "output": ["text"],
-        }
-        config["providers"] = {
+        "providers": {
             provider: {
                 "name": profile.model["name"] + " on Slurm",
                 "env": ["LLM_API_KEY"],
                 "package": "@opencode/ai/providers/openai-compatible",
                 "settings": {"baseURL": validate_base_url(base_url)},
                 "models": {alias: model},
-            }
-        }
-    else:
-        raise ConfigError("OpenCode config version must be 1 or 2")
+            },
+        },
+    }
     return json.dumps(config, indent=2) + "\n"
 
 

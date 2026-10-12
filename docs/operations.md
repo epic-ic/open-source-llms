@@ -117,7 +117,7 @@ agent configs have been replaced by profiles and generated configs:
 | `sbatch slurm/serve.sbatch` | `uv run llm-submit qwen-27b` |
 | `sbatch slurm/serve-next.sbatch` | `uv run llm-submit qwen-next` |
 | `sbatch slurm/serve-glm.sbatch` | `uv run llm-submit glm-flash` |
-| `config/opencode-*.json` | `uv run llm-config opencode PROFILE --opencode-version 1\|2` |
+| `config/opencode-*.json` | `uv run llm-config opencode PROFILE` (OpenCode 2.x only) |
 | `config/codex.toml` | `uv run llm-config codex PROFILE` |
 | `python3 main.py --models` | `uv run llm-models --profile qwen-27b` |
 | `python3 main.py "PROMPT"` | `uv run llm-chat --profile qwen-27b "PROMPT"` |
