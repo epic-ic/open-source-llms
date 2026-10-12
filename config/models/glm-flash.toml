@@ -12,8 +12,8 @@ entrypoint = "{quant}/*-00001-of-*.gguf"
 
 [server]
 port = 8001
-context_size = 131072
-max_output = 16384
+context_size = 262144
+max_output = 32768
 reasoning = "on"
 reasoning_effort = "max"
 temperature = 1.0
