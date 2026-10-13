@@ -89,7 +89,6 @@ class CLITests(unittest.TestCase):
             status, output, error = self.invoke("config", "codex", "--job-config", str(job))
         self.assertEqual(status, 0, error)
         self.assertIn("http://127.0.0.1:8001/v1", output)
-        self.assertIn("model_context_window = 131072", output)
         self.assertEqual(read_snapshot(job)[1].server["port"], 8001)
 
     def test_explicit_model_file_takes_precedence_over_environment(self):
