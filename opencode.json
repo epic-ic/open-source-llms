@@ -15,8 +15,8 @@
         "glm-5.3-flash": {
           "name": "GLM-5.3-Flash (Unsloth GGUF)",
           "limit": {
-            "context": 131072,
-            "output": 16384
+            "context": 262144,
+            "output": 32768
           },
           "capabilities": {
             "tools": true,
