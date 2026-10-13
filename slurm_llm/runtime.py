@@ -19,24 +19,16 @@ def runtime_command(root: Path, override: str | None = None) -> tuple[Path, dict
     if not executable:
         path = metadata / "server.path"
         if not path.is_file():
-            raise ConfigError(
-                "Prepare the runtime with 'uv run llm-prepare PROFILE' or set LLAMA_SERVER"
-            )
+            raise ConfigError("Prepare the runtime with 'uv run llm-prepare PROFILE' or set LLAMA_SERVER")
         executable = path.read_text().strip()
     server = resolve_path(root, executable)
     if not server.is_file() or not os.access(server, os.X_OK):
         raise ConfigError(f"Cannot execute llama-server: {server}")
     recorded = metadata / "server.path"
     libraries = metadata / "library-path.txt"
-    if (
-        recorded.is_file()
-        and libraries.is_file()
-        and resolve_path(root, recorded.read_text().strip()) == server
-    ):
+    if recorded.is_file() and libraries.is_file() and resolve_path(root, recorded.read_text().strip()) == server:
         prefix = libraries.read_text().strip()
-        env["LD_LIBRARY_PATH"] = prefix + (
-            os.pathsep + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else ""
-        )
+        env["LD_LIBRARY_PATH"] = prefix + (os.pathsep + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     return server, env
 
 
@@ -68,10 +60,7 @@ def prepare_runtime(root: Path) -> None:
     if not archives:
         raise ConfigError("runtime.toml requires at least one archive")
     for archive in archives:
-        if (
-            not isinstance(archive.get("name"), str)
-            or Path(archive["name"]).name != archive["name"]
-        ):
+        if not isinstance(archive.get("name"), str) or Path(archive["name"]).name != archive["name"]:
             raise ConfigError("Runtime archive names must be filenames")
         digest = archive.get("sha256", "")
         if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):

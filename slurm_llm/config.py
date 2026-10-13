@@ -156,9 +156,7 @@ class Profile:
                 raise ConfigError(f"model.{key} must be a nonempty string")
         self.data["server"] = SERVER_DEFAULTS | self.data.get("server", {})
         self.data["slurm"] = SLURM_DEFAULTS | self.data.get("slurm", {})
-        self.data["capabilities"] = {"tools": False, "responses": False} | self.data.get(
-            "capabilities", {}
-        )
+        self.data["capabilities"] = {"tools": False, "responses": False} | self.data.get("capabilities", {})
         self.data.setdefault("scripts", {})
         server = self.server
         for key in ("port", "context_size", "parallel", "max_output"):
@@ -199,9 +197,7 @@ class Profile:
             if type(self.capabilities[key]) is not bool:
                 raise ConfigError(f"capabilities.{key} must be true or false")
         if "reasoning_efforts" in self.capabilities:
-            efforts = strings(
-                self.capabilities["reasoning_efforts"], "capabilities.reasoning_efforts"
-            )
+            efforts = strings(self.capabilities["reasoning_efforts"], "capabilities.reasoning_efforts")
             if any(not effort.strip() for effort in efforts) or len(set(efforts)) != len(efforts):
                 raise ConfigError("capabilities.reasoning_efforts must be unique nonempty strings")
         for key, value in self.scripts.items():

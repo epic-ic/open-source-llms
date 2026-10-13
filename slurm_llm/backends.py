@@ -76,9 +76,7 @@ def prepare(
             prepare_weights(root, profile, quant)
     else:
         if quant or runtime_only or model_only:
-            raise ConfigError(
-                "Script profiles use their prepare script; quant/runtime flags are GGUF-only"
-            )
+            raise ConfigError("Script profiles use their prepare script; quant/runtime flags are GGUF-only")
         if "prepare" in profile.scripts:
             run(
                 ["bash", str(script_path(root, profile, "prepare"))],

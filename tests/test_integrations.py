@@ -28,9 +28,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(provider["settings"], {"baseURL": "http://localhost:9999/v1"})
         model = provider["models"]["org/model"]
         self.assertEqual(model["limit"], {"context": 16384, "output": 4096})
-        self.assertEqual(
-            model["capabilities"], {"tools": True, "input": ["text"], "output": ["text"]}
-        )
+        self.assertEqual(model["capabilities"], {"tools": True, "input": ["text"], "output": ["text"]})
 
     def test_opencode_omits_variants_without_declared_efforts(self):
         data = json.loads(opencode(self.profile, "http://localhost:9999/v1"))
@@ -82,9 +80,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn("export LLM_MODEL=org/model", output)
 
     def test_tunnel_uses_local_override_and_actual_server_port(self):
-        command = tunnel_command(
-            self.profile, login="alice@headnode", compute_host="compute", local_port=9000
-        )
+        command = tunnel_command(self.profile, login="alice@headnode", compute_host="compute", local_port=9000)
         self.assertIn("127.0.0.1:9000:compute:8001", command)
         self.assertEqual(command[-1], "alice@headnode")
 

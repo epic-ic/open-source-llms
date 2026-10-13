@@ -53,9 +53,7 @@ class Client:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        return Request(
-            url, data=json.dumps(body).encode() if body is not None else None, headers=headers
-        )
+        return Request(url, data=json.dumps(body).encode() if body is not None else None, headers=headers)
 
     def json(self, endpoint: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
@@ -67,9 +65,7 @@ class Client:
         except HTTPError as exc:
             raise APIError(f"HTTP {exc.code}: {exc.read().decode(errors='replace')}") from exc
         except (URLError, OSError) as exc:
-            raise APIError(
-                f"Connection failed: {exc}. Check the SSH tunnel and Slurm job."
-            ) from exc
+            raise APIError(f"Connection failed: {exc}. Check the SSH tunnel and Slurm job.") from exc
         except ValueError as exc:
             raise APIError(f"Unexpected API response: {exc}") from exc
 
@@ -87,9 +83,7 @@ class Client:
     def stream(self, endpoint: str, body: dict[str, Any]) -> Iterator[str]:
         completed = False
         try:
-            with urlopen(
-                self.request(endpoint, body | {"stream": True}), timeout=self.timeout
-            ) as response:
+            with urlopen(self.request(endpoint, body | {"stream": True}), timeout=self.timeout) as response:
                 for line in response:
                     if not line.startswith(b"data:"):
                         continue

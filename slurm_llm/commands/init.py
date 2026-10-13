@@ -18,9 +18,7 @@ def parser() -> argparse.ArgumentParser:
     cli.add_argument("--serve-script", help="Bash script path relative to repository root")
     cli.add_argument("--prepare-script", help="optional Bash preparation script")
     cli.add_argument("--tools", action="store_true", help="declare verified tool-call support")
-    cli.add_argument(
-        "--responses", action="store_true", help="declare verified Responses API support"
-    )
+    cli.add_argument("--responses", action="store_true", help="declare verified Responses API support")
     server_options(cli, key_file=False)
     return cli
 

@@ -104,15 +104,9 @@ def get_profile(
             raise ConfigError("Provide a profile or --job-config")
         profile = load_profile(root, name)
         use_env = True
-    server = {
-        key: getattr(args, key) for key in SERVER_OPTIONS if getattr(args, key, None) is not None
-    }
-    resources = {
-        key: getattr(args, key) for key in SECTIONS["slurm"] if getattr(args, key, None) is not None
-    }
-    profile = effective_profile(
-        profile, server=server, slurm=resources, cluster=cluster, use_env=use_env
-    )
+    server = {key: getattr(args, key) for key in SERVER_OPTIONS if getattr(args, key, None) is not None}
+    resources = {key: getattr(args, key) for key in SECTIONS["slurm"] if getattr(args, key, None) is not None}
+    profile = effective_profile(profile, server=server, slurm=resources, cluster=cluster, use_env=use_env)
     if getattr(args, "model_file", None):
         profile.model["file"] = str(resolve_path(root, args.model_file))
     return profile
@@ -139,9 +133,7 @@ def write_output(content: str, path: Path | None) -> None:
         print(content, end="")
 
 
-def api_context(
-    args: argparse.Namespace, *, authenticated: bool = True
-) -> tuple[Client, Profile | None]:
+def api_context(args: argparse.Namespace, *, authenticated: bool = True) -> tuple[Client, Profile | None]:
     root = project_root(args.root)
     job = read_job(args)
     profile = get_profile(args, root, job=job) if args.profile or job else None

@@ -105,9 +105,7 @@ class LaunchTests(unittest.TestCase):
     def test_submission_has_no_fixed_node_or_partition(self):
         command = submit_command(self.root, self.profile, self.root / "job.json")
         self.assertIn("--gres=gpu:3", command)
-        self.assertFalse(
-            any(arg.startswith("--nodelist") or arg.startswith("--partition") for arg in command)
-        )
+        self.assertFalse(any(arg.startswith("--nodelist") or arg.startswith("--partition") for arg in command))
         self.assertIn(f"--chdir={self.root}", command)
         self.assertEqual(command[-3], str(self.root))
 

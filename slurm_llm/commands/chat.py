@@ -28,9 +28,7 @@ def execute(args: argparse.Namespace) -> None:
     prompt = sys.stdin.read() if args.prompt == "-" else args.prompt
     if not prompt.strip():
         raise ConfigError("Prompt cannot be empty")
-    model = client.model_id(
-        args.model or os.getenv("LLM_MODEL") or (profile.model["alias"] if profile else None)
-    )
+    model = client.model_id(args.model or os.getenv("LLM_MODEL") or (profile.model["alias"] if profile else None))
     maximum = args.max_tokens or (profile.server["max_output"] if profile else 1024)
     endpoint, body = chat_body(
         model,

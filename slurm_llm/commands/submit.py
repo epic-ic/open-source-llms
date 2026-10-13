@@ -17,12 +17,8 @@ def parser() -> argparse.ArgumentParser:
     for key in ("partition", "account", "nodelist", "constraint", "gpu-type", "qos", "mem", "time"):
         cli.add_argument(f"--{key}")
     check = cli.add_mutually_exclusive_group()
-    check.add_argument(
-        "--dry-run", action="store_true", help="preview without writing or submitting"
-    )
-    check.add_argument(
-        "--test-only", action="store_true", help="ask Slurm to validate without submitting"
-    )
+    check.add_argument("--dry-run", action="store_true", help="preview without writing or submitting")
+    check.add_argument("--test-only", action="store_true", help="ask Slurm to validate without submitting")
     cli.add_argument("--llama-server", help="override the runtime executable")
     server_options(cli)
     return cli

@@ -60,15 +60,9 @@ def read_snapshot(path: Path) -> tuple[Path, Profile, Path, str | None]:
         raise ConfigError(f"Cannot read job snapshot {path}: {exc}") from exc
 
 
-def submit_command(
-    root: Path, profile: Profile, snapshot_path: Path, *, test_only: bool = False
-) -> list[str]:
+def submit_command(root: Path, profile: Profile, snapshot_path: Path, *, test_only: bool = False) -> list[str]:
     settings = profile.slurm
-    gpu = (
-        f"gpu:{settings['gpu_type']}:{settings['gpus']}"
-        if settings.get("gpu_type")
-        else (f"gpu:{settings['gpus']}")
-    )
+    gpu = f"gpu:{settings['gpu_type']}:{settings['gpus']}" if settings.get("gpu_type") else (f"gpu:{settings['gpus']}")
     log = root / "logs" / f"{profile.id}-%j.log"
     command = [
         "sbatch",
@@ -90,9 +84,7 @@ def submit_command(
             command.append(f"--{key}={settings[key]}")
     if test_only:
         command.append("--test-only")
-    command.extend(
-        [str(root / "slurm" / "serve.sbatch"), str(root), str(snapshot_path), sys.executable]
-    )
+    command.extend([str(root / "slurm" / "serve.sbatch"), str(root), str(snapshot_path), sys.executable])
     return command
 
 
@@ -150,9 +142,7 @@ def serve(
         print(shlex.join(command if local else ["srun", *command]))
         return
     if not local and not os.getenv("SLURM_JOB_ID"):
-        raise ConfigError(
-            "Use 'uv run llm-submit PROFILE', or pass --local inside an existing allocation"
-        )
+        raise ConfigError("Use 'uv run llm-submit PROFILE', or pass --local inside an existing allocation")
     host = socket.getfqdn()
     print(
         f"Job {os.getenv('SLURM_JOB_ID', 'local')}; host {host}; model {profile.model['alias']}; "

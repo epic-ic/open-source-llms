@@ -29,9 +29,7 @@ def execute(args: argparse.Namespace) -> None:
     else:
         key_file = key_path(root, args.api_key_file)
         executable = args.llama_server
-    slurm.serve(
-        root, profile, key_file, executable=executable, dry_run=args.dry_run, local=args.local
-    )
+    slurm.serve(root, profile, key_file, executable=executable, dry_run=args.dry_run, local=args.local)
 
 
 def main(argv: list[str] | None = None) -> int:

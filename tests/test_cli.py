@@ -61,9 +61,7 @@ class CLITests(unittest.TestCase):
     def test_config_does_not_overwrite_an_existing_file(self):
         output = self.root / "opencode.json"
         output.write_text("existing-config")
-        status, _, _ = self.invoke(
-            "config", "opencode", "glm-flash", "--output", str(output), root=ROOT
-        )
+        status, _, _ = self.invoke("config", "opencode", "glm-flash", "--output", str(output), root=ROOT)
         self.assertEqual(status, 1)
         self.assertEqual(output.read_text(), "existing-config")
 
@@ -97,9 +95,7 @@ class CLITests(unittest.TestCase):
     def test_explicit_model_file_takes_precedence_over_environment(self):
         self.invoke("init", "local-model", "--model-file", "old.gguf")
         with patch.dict(os.environ, {"LLM_MODEL_FILE": "environment.gguf"}):
-            status, output, error = self.invoke(
-                "submit", "local-model", "--model-file", "flag.gguf", "--dry-run"
-            )
+            status, output, error = self.invoke("submit", "local-model", "--model-file", "flag.gguf", "--dry-run")
         self.assertEqual(status, 0, error)
         self.assertIn(str(self.root / "flag.gguf"), output)
         self.assertNotIn("environment.gguf", output)
@@ -136,8 +132,6 @@ class CLITests(unittest.TestCase):
         self.assertEqual(status, 0, error)
         self.assertIn("--port 8001", output)
         self.assertNotIn("9999", output)
-        status, _, error = self.invoke(
-            "serve", "--job-config", str(job), "--port", "9999", "--dry-run"
-        )
+        status, _, error = self.invoke("serve", "--job-config", str(job), "--port", "9999", "--dry-run")
         self.assertEqual(status, 1)
         self.assertIn("cannot be overridden", error)
