@@ -57,7 +57,7 @@ def server_options(parser: argparse.ArgumentParser, *, key_file: bool = True) ->
         parser.add_argument("--api-key-file", help="path relative to --root, or absolute")
 
 
-def command_parser(name: str, description: str) -> argparse.ArgumentParser:
+def command_parser(name: str, description: str | None) -> argparse.ArgumentParser:
     cli = argparse.ArgumentParser(prog=f"llm-{name}", description=description)
     cli.add_argument("--root", help="repository root (or set LLM_ROOT)")
     return cli
