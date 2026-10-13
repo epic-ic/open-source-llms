@@ -1,0 +1,43 @@
+# Copy to config/models/my-model.toml, or use `uv run llm-init my-model --backend vllm`.
+[model]
+name = "My model with vLLM"
+alias = "my-model"
+backend = "vllm"
+# To serve existing weights, remove [download] and set a local model directory:
+# file = "/SHARED/STORAGE/my-model"
+# Or let vLLM download from the Hub when the job starts (needs compute-node internet):
+# repo = "ORG/MODEL"
+
+[download]
+repo = "ORG/MODEL" # A safetensors checkpoint supported by your vLLM version.
+revision = "main"  # Use a commit ID to make downloads reproducible.
+directory = "models/my-model"
+# include defaults to configs, tokenizers, templates, and *.safetensors.
+
+[server]
+context_size = 32768 # vLLM --max-model-len: tokens per request
+parallel = 8         # vLLM --max-num-seqs: concurrent requests sharing the KV cache
+max_output = 4096    # default max_tokens for requests that omit it
+extra_args = []      # any other `vllm serve` flags, as separate items
+
+[vllm]
+gpu_memory_utilization = 0.90
+enable_prefix_caching = true
+# tensor_parallel_size defaults to the allocated GPU count.
+# kv_cache_dtype = "fp8"
+# quantization = "fp8"
+# reasoning_parser = "qwen3"
+# tool_call_parser = "hermes"    # required when capabilities.tools = true
+# chat_template_kwargs = { enable_thinking = false }
+# env = { VLLM_ATTENTION_BACKEND = "FLASHINFER" }
+
+[slurm]
+gpus = 1
+cpus_per_task = 8
+mem = "64G"
+time = "08:00:00"
+
+[capabilities]
+# Enable only after checking your model, parsers, and runtime.
+tools = false
+responses = false

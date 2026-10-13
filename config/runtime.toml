@@ -9,3 +9,13 @@ sha256 = "8a310ed6b6d50d84947477026819da69ec07d13e6607bf0dc26523ba55817aba"
 [[archives]]
 name = "cudart-llama-b11472-bin-ubuntu-cuda-12.8-x64.tar.gz"
 sha256 = "7713c7c7a74cf63e8e55e180aeb04b186d105f94b60ac3261cde0105cf1c7e2c"
+
+# vLLM is installed by `uv run llm-prepare` for backend = "vllm" profiles into
+# .tools/vllm/VERSION, a uv virtual environment on shared storage.
+[vllm]
+version = "0.30.0"
+python = "3.12"
+# Extra requirements installed alongside vLLM, e.g. ["transformers>=5.8"].
+packages = []
+# uv --torch-backend (e.g. "cu129"); unset uses the PyPI torch build vLLM pins.
+# torch_backend = "cu129"

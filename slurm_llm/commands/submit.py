@@ -3,7 +3,7 @@
 import argparse
 
 from .. import slurm
-from ..cli import command_parser, get_profile, positive_int, run_cli, server_options
+from ..cli import command_parser, executable, get_profile, positive_int, run_cli, server_options
 from ..config import load_cluster, project_root
 from ..credentials import key_path
 
@@ -19,7 +19,8 @@ def parser() -> argparse.ArgumentParser:
     check = cli.add_mutually_exclusive_group()
     check.add_argument("--dry-run", action="store_true", help="preview without writing or submitting")
     check.add_argument("--test-only", action="store_true", help="ask Slurm to validate without submitting")
-    cli.add_argument("--llama-server", help="override the runtime executable")
+    cli.add_argument("--llama-server", help="llama-server executable for llama.cpp profiles")
+    cli.add_argument("--vllm", help="vllm executable for vLLM profiles")
     server_options(cli)
     return cli
 
@@ -31,7 +32,7 @@ def execute(args: argparse.Namespace) -> None:
         root,
         profile,
         key_path(root, args.api_key_file),
-        executable=args.llama_server,
+        executable=executable(args, profile),
         dry_run=args.dry_run,
         test_only=args.test_only,
     )

@@ -11,12 +11,13 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from . import vllm
 from .backends import script_path, server_command
 from .config import ConfigError, Profile
 from .credentials import read_key
 from .process import atomic_write, run
 from .runtime import runtime_command
-from .weights import model_path
+from .weights import model_path, vllm_model
 
 
 def snapshot(
@@ -33,6 +34,13 @@ def snapshot(
         if profile.backend == "llama.cpp":
             profile.model["file"] = str(model_path(root, profile))
             executable = str(runtime_command(root, executable)[0])
+        elif profile.backend == "vllm":
+            # Freeze the prepared checkpoint so a later --quant/prepare cannot alter the job.
+            source = vllm_model(root, profile)
+            if Path(source).is_absolute():
+                profile.model["file"] = source
+            executable = str(vllm.runtime_command(root, executable)[0])
+            vllm.parallel_sizes(profile, profile.slurm["gpus"])
         else:
             script_path(root, profile, "serve")
     return {

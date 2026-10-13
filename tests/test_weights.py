@@ -93,6 +93,27 @@ class WeightTests(unittest.TestCase):
         self.assertEqual(model_path(self.root, selected), first)
         self.assertEqual(state_path(self.root, selected).read_text().strip(), str(first))
 
+    def test_each_include_pattern_gets_its_own_flag(self):
+        self.create("models/model.gguf")
+        selected = Profile(
+            "custom",
+            {
+                "download": {
+                    "repo": "org/model",
+                    "directory": "models",
+                    "include": ["*.json", "*.gguf"],
+                    "entrypoint": "*.gguf",
+                },
+            },
+        )
+        with (
+            patch("slurm_llm.weights.hf_command", return_value=["hf"]),
+            patch("slurm_llm.weights.run") as download,
+        ):
+            prepare_weights(self.root, selected)
+        command = download.call_args.args[0]
+        self.assertEqual(command[-4:], ["--include", "*.json", "--include", "*.gguf"])
+
     def test_failed_download_does_not_replace_prepared_model(self):
         first = self.create("models/Q4/model.gguf")
         selected = Profile(

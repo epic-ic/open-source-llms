@@ -1,7 +1,8 @@
-"""Download selected Hugging Face files and validate GGUF entry points."""
+"""Download selected Hugging Face files and validate GGUF files or vLLM checkpoints."""
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -28,12 +29,37 @@ def validate_gguf(path: Path) -> Path:
     return path
 
 
+def validate_checkpoint(path: Path) -> Path:
+    """Check a Hugging Face model directory before vLLM loads it on a compute node."""
+    if not path.is_dir():
+        raise ConfigError(f"Missing model directory: {path}")
+    if not (path / "config.json").is_file() and not (path / "params.json").is_file():
+        raise ConfigError(f"No config.json or params.json in {path}")
+    index = path / "model.safetensors.index.json"
+    if index.is_file():
+        try:
+            shards = set(json.loads(index.read_text())["weight_map"].values())
+        except (OSError, ValueError, KeyError, AttributeError) as exc:
+            raise ConfigError(f"Cannot read {index}: {exc}") from exc
+        for shard in sorted(shards):
+            file = path / shard
+            if not file.is_file() or file.stat().st_size == 0:
+                raise ConfigError(f"Missing or empty safetensors shard: {file}")
+    elif not any(
+        file.stat().st_size > 0 for pattern in ("*.safetensors", "*.bin", "*.pt") for file in path.glob(pattern)
+    ):
+        raise ConfigError(f"No model weights in {path}")
+    return path
+
+
 def state_path(root: Path, profile: Profile) -> Path:
     return root / ".tools" / "profiles" / profile.id / "model.path"
 
 
 def download_entry(root: Path, profile: Profile, quant: str | None = None) -> Path:
     directory = resolve_path(root, profile.format_download(profile.download["directory"], quant))
+    if profile.backend == "vllm":
+        return validate_checkpoint(directory)
     pattern = profile.format_download(profile.download["entrypoint"], quant)
     matches = sorted(directory.glob(pattern))
     if len(matches) != 1:
@@ -42,13 +68,21 @@ def download_entry(root: Path, profile: Profile, quant: str | None = None) -> Pa
 
 
 def model_path(root: Path, profile: Profile, override: str | None = None) -> Path:
+    validate = validate_checkpoint if profile.backend == "vllm" else validate_gguf
     if override or profile.model.get("file"):
-        return validate_gguf(resolve_path(root, override or profile.model["file"]))
+        return validate(resolve_path(root, override or profile.model["file"]))
     state = state_path(root, profile)
     if state.is_file():
-        return validate_gguf(resolve_path(root, state.read_text().strip()))
+        return validate(resolve_path(root, state.read_text().strip()))
     # Reuse existing downloads even if they were made with the old scripts.
     return download_entry(root, profile)
+
+
+def vllm_model(root: Path, profile: Profile) -> str:
+    """Return a validated local checkpoint, or a Hub ID that vLLM downloads itself."""
+    if profile.model.get("file") or profile.download:
+        return str(model_path(root, profile))
+    return profile.model["repo"]
 
 
 def hf_command() -> list[str]:
@@ -71,7 +105,8 @@ def prepare_weights(root: Path, profile: Profile, quant: str | None = None) -> P
         # Validate all substitutions before invoking the downloader.
         directory = resolve_path(root, profile.format_download(download["directory"], quant))
         patterns = [profile.format_download(pattern, quant) for pattern in download["include"]]
-        profile.format_download(download["entrypoint"], quant)
+        if "entrypoint" in download:
+            profile.format_download(download["entrypoint"], quant)
         directory.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ)
         env.setdefault("HF_HOME", str(root / ".cache" / "huggingface"))
@@ -85,8 +120,8 @@ def prepare_weights(root: Path, profile: Profile, quant: str | None = None) -> P
                 download.get("revision", "main"),
                 "--local-dir",
                 str(directory),
-                "--include",
-                *patterns,
+                # hf takes one pattern per --include; extra values become FILENAMES and disable --include.
+                *(arg for pattern in patterns for arg in ("--include", pattern)),
             ],
             env=env,
             cwd=root,

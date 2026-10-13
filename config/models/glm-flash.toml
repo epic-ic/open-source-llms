@@ -31,6 +31,7 @@ flash_attn = "on"
 gpus = 5
 cpus_per_task = 32
 mem = "256G"
+time = "5-00:00:00"
 
 [capabilities]
 tools = true
