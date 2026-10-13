@@ -1,7 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "llms"
-version = "0.1.0"
-description = "Access a Slurm-hosted open source model"
+name = "slurm-llm"
+version = "0.2.0"
+description = "Prepare, serve, and connect to open source models on Slurm"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
+
+[dependency-groups]
+dev = ["ruff>=0.14"]
+
+[project.scripts]
+llm-health = "slurm_llm.commands.health:main"
+llm-models = "slurm_llm.commands.models:main"
+llm-chat = "slurm_llm.commands.chat:main"
+llm-prepare = "slurm_llm.commands.prepare:main"
+llm-submit = "slurm_llm.commands.submit:main"
+llm-serve = "slurm_llm.commands.serve:main"
+llm-list = "slurm_llm.commands.list:main"
+llm-init = "slurm_llm.commands.init:main"
+llm-config = "slurm_llm.commands.config:main"
+llm-tunnel = "slurm_llm.commands.tunnel:main"
+
+[tool.setuptools.packages.find]
+include = ["slurm_llm*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

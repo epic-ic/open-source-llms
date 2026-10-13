@@ -1,0 +1,32 @@
+# Copy to config/models/my-model.toml and select any supported GGUF.
+[model]
+name = "My GGUF model"
+alias = "my-model"
+backend = "llama.cpp"
+# To use already-downloaded weights, replace [download] with:
+# file = "models/my-model/model.gguf"
+
+[download]
+repo = "ORG/MODEL_GGUF_REPOSITORY"
+revision = "main" # Use a commit ID to make downloads reproducible.
+directory = "models/my-model"
+include = ["model-Q4_K_M.gguf"]
+entrypoint = "model-Q4_K_M.gguf"
+# For split GGUFs: include = ["QUANT/*.gguf"]
+#                 entrypoint = "QUANT/*-00001-of-*.gguf"
+
+[server]
+context_size = 8192
+max_output = 2048
+parallel = 1
+extra_args = []
+
+[slurm]
+gpus = 1
+cpus_per_task = 8
+mem = "64G"
+time = "08:00:00"
+
+[capabilities]
+tools = false
+responses = false

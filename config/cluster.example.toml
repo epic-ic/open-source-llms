@@ -1,0 +1,14 @@
+# Copy to config/cluster.local.toml and adjust for your cluster.
+# This local file is ignored by Git. Omit settings to use Slurm defaults.
+[slurm]
+partition = "main"
+# account = "YOUR_ACCOUNT"
+# nodelist = "YOUR_NODE"       # Optional: let Slurm schedule by default.
+# gpu_type = "YOUR_GPU_TYPE"   # Optional: otherwise request gpu:COUNT.
+# constraint = "YOUR_CONSTRAINT"
+# qos = "YOUR_QOS"
+
+[ssh]
+login = "USER@HEADNODE"
+# Set this after reading the job log, or pass --compute-host to `llm tunnel`.
+# compute_host = "COMPUTE_HOST_FROM_JOB_LOG"

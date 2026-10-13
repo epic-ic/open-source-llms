@@ -1,0 +1,18 @@
+# Step 1: save the keys below as ~/.codex/slurm_glm_flash.config.toml. Codex 0.134
+# and later read --profile settings from that file, not from a [profiles] table
+# in config.toml.
+model_provider = "slurm_glm_flash"
+model = "glm-5.3-flash"
+model_context_window = 262144
+model_auto_compact_token_limit = 196608
+
+# Step 2: merge the table below into ~/.codex/config.toml.
+# Then start with: codex --profile slurm_glm_flash
+[model_providers.slurm_glm_flash]
+name = "GLM-5.3-Flash (Unsloth GGUF) on Slurm"
+base_url = "http://127.0.0.1:8001/v1"
+env_key = "LLM_API_KEY"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+stream_idle_timeout_ms = 300000

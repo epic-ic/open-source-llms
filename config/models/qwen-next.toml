@@ -1,0 +1,37 @@
+[model]
+name = "Qwen3.8 Flash Next (Unsloth GGUF)"
+alias = "qwen3.8-flash-next"
+quant = "UD-Q4_K_XL"
+
+[download]
+repo = "unsloth/Qwen3.8-Flash-Next-GGUF"
+revision = "main"
+directory = "models/Qwen3.8-Flash-Next-GGUF"
+include = ["{quant}/*.gguf"]
+entrypoint = "{quant}/*-00001-of-*.gguf"
+
+[server]
+context_size = 65536
+max_output = 8192
+reasoning = "off"
+temperature = 0.7
+top_p = 0.8
+top_k = 20
+min_p = 0.0
+presence_penalty = 1.5
+repeat_penalty = 1.0
+split_mode = "layer"
+lazy_mode = "auto"
+cache_type_k = "bf16"
+cache_type_v = "bf16"
+flash_attn = "on"
+
+[slurm]
+gpus = 3
+cpus_per_task = 16
+mem = "128G"
+
+[capabilities]
+tools = true
+responses = true
+reasoning_efforts = ["low", "medium", "xhigh"]
