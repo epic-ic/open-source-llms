@@ -32,7 +32,7 @@ tensor_parallel_size = 8
 enable_expert_parallel = true
 gpu_memory_utilization = 0.92
 # sm_120 sparse MLA (FLASHINFER_MLA_SPARSE_SM120) only supports the packed fp8 layout.
-kv_cache_dtype = "fp8_ds_mla"
+kv_cache_dtype = "fp8"
 max_num_batched_tokens = 8192
 enable_prefix_caching = true
 # Text-only serving: skip the vision tower and give its memory to the KV cache.

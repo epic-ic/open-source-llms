@@ -275,12 +275,13 @@ class LaunchTests(unittest.TestCase):
         toolkit = self.root / "venv" / "lib" / "python3.12" / "site-packages" / "nvidia" / "cu13"
         (toolkit / "lib").mkdir(parents=True)
         (toolkit / "lib" / "libcudart.so.13").write_text("")
+        (toolkit / "lib" / "libnvrtc.so.13").write_text("")
         vllm.link_cuda_wheels(self.root / "venv")
         vllm.link_cuda_wheels(self.root / "venv")
         self.assertEqual(
-            (toolkit / "lib64" / "libcudart.so").resolve(),
-            (toolkit / "lib" / "libcudart.so.13").resolve(),
+            (toolkit / "lib64" / "libcudart.so").resolve(), (toolkit / "lib" / "libcudart.so.13").resolve()
         )
+        self.assertEqual((toolkit / "lib64" / "libnvrtc.so").resolve(), (toolkit / "lib" / "libnvrtc.so.13").resolve())
 
 
 class MiddlewareTests(unittest.TestCase):

@@ -82,17 +82,18 @@ def runtime_command(root: Path, override: str | None = None) -> tuple[Path, dict
 
 
 def link_cuda_wheels(install: Path) -> None:
-    # JIT builds (FlashInfer) link with -L$CUDA_HOME/lib64 -lcudart, but the CUDA
-    # wheels ship lib/ and only the versioned libcudart.so.N.
+    # JIT builds (FlashInfer) link with -L$CUDA_HOME/lib64 -lcudart -lnvrtc, but the
+    # CUDA wheels ship lib/ and only versioned sonames (libcudart.so.N, libnvrtc.so.N).
     for toolkit in install.glob("lib/python*/site-packages/nvidia/cu*"):
         lib = toolkit / "lib"
         if not lib.is_dir():
             continue
         if not (toolkit / "lib64").exists():
             (toolkit / "lib64").symlink_to("lib")
-        versioned = sorted(lib.glob("libcudart.so.*"))
-        if versioned and not (lib / "libcudart.so").exists():
-            (lib / "libcudart.so").symlink_to(versioned[0].name)
+        for versioned in sorted(lib.glob("lib*.so.*")):
+            unversioned = lib / (versioned.name.split(".so.", 1)[0] + ".so")
+            if not unversioned.exists() and not unversioned.is_symlink():
+                unversioned.symlink_to(versioned.name)
 
 
 def prepare_runtime(root: Path) -> None:
