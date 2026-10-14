@@ -12,8 +12,9 @@ entrypoint = "{quant}/*-00001-of-*.gguf"
 
 [server]
 port = 8001
-context_size = 262144
+context_size = 524288
 max_output = 32768
+parallel = 2
 reasoning = "on"
 reasoning_effort = "max"
 temperature = 1.0
@@ -28,10 +29,9 @@ cache_type_v = "bf16"
 flash_attn = "on"
 
 [slurm]
-gpus = 5
+gpus = 6
 cpus_per_task = 32
 mem = "256G"
-time = "5-00:00:00"
 
 [capabilities]
 tools = true
