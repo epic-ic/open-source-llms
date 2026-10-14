@@ -277,7 +277,10 @@ class LaunchTests(unittest.TestCase):
         (toolkit / "lib" / "libcudart.so.13").write_text("")
         vllm.link_cuda_wheels(self.root / "venv")
         vllm.link_cuda_wheels(self.root / "venv")
-        self.assertEqual((toolkit / "lib64" / "libcudart.so").resolve(), (toolkit / "lib" / "libcudart.so.13").resolve())
+        self.assertEqual(
+            (toolkit / "lib64" / "libcudart.so").resolve(),
+            (toolkit / "lib" / "libcudart.so.13").resolve(),
+        )
 
 
 class MiddlewareTests(unittest.TestCase):

@@ -181,7 +181,10 @@ def strings(value: Any, label: str) -> list[str]:
 
 
 def relative_path(value: str, label: str) -> str:
-    if not value or Path(value).is_absolute() or ".." in Path(value).parts:
+    parts = Path(value).parts
+    # A leading "~" is expanded to the user's home directory by resolve_path,
+    # so it escapes the repository just like ".." or an absolute path would.
+    if not value or Path(value).is_absolute() or ".." in parts or (parts and parts[0].startswith("~")):
         raise ConfigError(f"{label} must be a nonempty path relative to the repository")
     return value
 

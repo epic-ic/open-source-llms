@@ -88,3 +88,8 @@ class ConfigTests(unittest.TestCase):
     def test_profile_name_cannot_escape_directory(self):
         with self.assertRaises(ConfigError):
             load_profile(ROOT, "../bad")
+
+    def test_relative_paths_cannot_escape_through_home_expansion(self):
+        for value in ("~/weights", "~user/weights"):
+            with self.subTest(value=value), self.assertRaises(ConfigError):
+                Profile("custom", {"model": {"backend": "script"}, "scripts": {"serve": value}})
