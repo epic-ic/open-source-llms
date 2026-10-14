@@ -193,7 +193,7 @@ slurm_llm/commands/    Independent command parsers, handlers, and entry points
 slurm/serve.sbatch      One batch entry point for every model
 examples/              GGUF/script profile templates and a vLLM adapter
 scripts/prepare.sh     Optional Bash wrapper for `uv run llm-prepare PROFILE`
-docs/                  Model extension, harness setup, operations, and migration
+docs/                  Model extension, harness setup, operations
 tests/                 Unit and local HTTP integration tests
 models/, .tools/       Downloaded weights, runtime, prepared paths, job snapshots (ignored)
 .secrets/, logs/       Credentials and job logs (ignored)
@@ -213,5 +213,4 @@ submission snapshots, resource overrides, generated configs, and HTTP/streaming
 clients against a local test server. GitHub Actions runs the same checks on pushes
 and pull requests. Live GPU inference and actual agent tool
 loops must be checked against the chosen model. See
-[operations and migration](docs/operations.md) for troubleshooting and the
-replacement commands for the old model-specific scripts.
+[operations](docs/operations.md) for troubleshooting.

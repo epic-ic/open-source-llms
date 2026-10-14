@@ -1,4 +1,4 @@
-# Operations and migration
+# Operations
 
 ## Slurm lifecycle
 
@@ -104,55 +104,21 @@ The shared Slurm wrapper runs the serve module directly; job snapshots and model
 profiles keep the same format. Existing queued jobs using that wrapper can still
 load their snapshots.
 
-## Migration from the original repository
-
-The old duplicated model-specific download scripts, Slurm files, and static
-agent configs have been replaced by profiles and generated configs:
-
-| Old command/config | Replacement |
-| --- | --- |
-| `bash scripts/prepare.sh` | `uv run llm-prepare qwen-27b` or `bash scripts/prepare.sh qwen-27b` |
-| `bash scripts/prepare-next.sh [QUANT]` | `uv run llm-prepare qwen-next [--quant QUANT]` |
-| `bash scripts/prepare-glm.sh [QUANT]` | `uv run llm-prepare glm-flash [--quant QUANT]` |
-| `sbatch slurm/serve.sbatch` | `uv run llm-submit qwen-27b` |
-| `sbatch slurm/serve-next.sbatch` | `uv run llm-submit qwen-next` |
-| `sbatch slurm/serve-glm.sbatch` | `uv run llm-submit glm-flash` |
-| `config/opencode-*.json` | `uv run llm-config opencode PROFILE` (OpenCode 2.x only) |
-| `config/codex.toml` | `uv run llm-config codex PROFILE` |
-| `python3 main.py --models` | `uv run llm-models --profile qwen-27b` |
-| `python3 main.py "PROMPT"` | `uv run llm-chat --profile qwen-27b "PROMPT"` |
-| `QWEN_API_KEY` / `GLM_API_KEY` | `LLM_API_KEY` |
-| `QWEN_BASE_URL` / `QWEN_MODEL` | `LLM_BASE_URL` / `LLM_MODEL` |
-
-Existing files in `models/`, `.tools/llama-cpp/`, and `.secrets/llm-api-key` remain
-usable. The old default downloaded paths are recognized without preparation.
-New quant selections are recorded under `.tools/profiles/PROFILE/model.path`.
-If the old `.tools/qwen-next/model.path` or `.tools/glm-flash/model.path` selected
-a non-default quant, run the new `uv run llm-prepare --quant` command to record that choice,
-or pass `--model-file` explicitly. API aliases remain the same; generated
-provider/profile IDs are now based on profile filenames.
-
-The existing checkout's gpu8/Blackwell partition settings have been retained in
-an ignored `config/cluster.local.toml`. New clones start from the portable example.
-GLM's original scripted settings are now authoritative: port 8001, 32 CPUs,
-256G host RAM, and high reasoning effort. The old README's conflicting port/CPU/
-reasoning descriptions are no longer used.
-
 ## Troubleshooting
 
-| Symptom | Check |
-| --- | --- |
-| Job pending | `squeue -j JOB_ID`; inspect partition/account and requested resources |
-| Submission fails | `uv run llm-submit PROFILE --test-only`; confirm prepared weights/runtime/key |
-| Missing shard | Rerun preparation for the selected quant; retain every GGUF shard |
-| Local connection refused | Tunnel foreground process, actual compute hostname, server port, job log |
-| HTTP 503 | Model still loading; `uv run llm-health --profile PROFILE --wait 300` |
-| HTTP 401 | Load the same key that the server's key file contains |
-| Local port busy | `uv run llm-tunnel --local-port` and client/config `--base-url` |
-| Server port busy | `uv run llm-submit --port`, then regenerate the tunnel and configs |
-| CUDA errors | Compatible NVIDIA driver/runtime and correct `LLAMA_SERVER` library environment |
-| Out of GPU memory | Smaller quant, context, or concurrency; inspect per-GPU usage |
-| Tool/Responses errors | Model template, parser, declared capabilities, actual harness tool loop |
+| Symptom                  | Check                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| Job pending              | `squeue -j JOB_ID`; inspect partition/account and requested resources           |
+| Submission fails         | `uv run llm-submit PROFILE --test-only`; confirm prepared weights/runtime/key   |
+| Missing shard            | Rerun preparation for the selected quant; retain every GGUF shard               |
+| Local connection refused | Tunnel foreground process, actual compute hostname, server port, job log        |
+| HTTP 503                 | Model still loading; `uv run llm-health --profile PROFILE --wait 300`           |
+| HTTP 401                 | Load the same key that the server's key file contains                           |
+| Local port busy          | `uv run llm-tunnel --local-port` and client/config `--base-url`                 |
+| Server port busy         | `uv run llm-submit --port`, then regenerate the tunnel and configs              |
+| CUDA errors              | Compatible NVIDIA driver/runtime and correct `LLAMA_SERVER` library environment |
+| Out of GPU memory        | Smaller quant, context, or concurrency; inspect per-GPU usage                   |
+| Tool/Responses errors    | Model template, parser, declared capabilities, actual harness tool loop         |
 
 ## Checks
 
