@@ -101,18 +101,6 @@ for KV caches and compute buffers; reduce context/concurrency or choose a
 smaller quant when necessary. This repository does not delete cached weights
 or interrupt existing allocations during preparation.
 
-## Migration from the single CLI
-
-The former `llm COMMAND ...`, `python3 main.py COMMAND ...`, and
-`python3 -m slurm_llm COMMAND ...` forms have been replaced by independent commands:
-`uv run llm-COMMAND ...`. Run `uv sync` to install the entry points.
-Each command accepts
-its own `--root` option; no subcommand dispatch is used.
-
-The shared Slurm wrapper runs the serve module directly; job snapshots and model
-profiles keep the same format. Existing queued jobs using that wrapper can still
-load their snapshots.
-
 ## Troubleshooting
 
 | Symptom                                        | Check                                                                                                             |
