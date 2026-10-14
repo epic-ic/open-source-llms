@@ -81,6 +81,20 @@ def runtime_command(root: Path, override: str | None = None) -> tuple[Path, dict
     return server, env
 
 
+def link_cuda_wheels(install: Path) -> None:
+    # JIT builds (FlashInfer) link with -L$CUDA_HOME/lib64 -lcudart, but the CUDA
+    # wheels ship lib/ and only the versioned libcudart.so.N.
+    for toolkit in install.glob("lib/python*/site-packages/nvidia/cu*"):
+        lib = toolkit / "lib"
+        if not lib.is_dir():
+            continue
+        if not (toolkit / "lib64").exists():
+            (toolkit / "lib64").symlink_to("lib")
+        versioned = sorted(lib.glob("libcudart.so.*"))
+        if versioned and not (lib / "libcudart.so").exists():
+            (lib / "libcudart.so").symlink_to(versioned[0].name)
+
+
 def prepare_runtime(root: Path) -> None:
     if os.getenv("VLLM_BIN"):
         server, _ = runtime_command(root)
@@ -105,6 +119,7 @@ def prepare_runtime(root: Path) -> None:
     server = install / "bin" / "vllm"
     metadata = metadata_path(root)
     if server.is_file() and metadata.is_file() and resolve_path(root, metadata.read_text().strip()) == server.resolve():
+        link_cuda_wheels(install)
         print(f"vLLM already prepared: {server}")
         return
     env = dict(os.environ)
@@ -128,6 +143,7 @@ def prepare_runtime(root: Path) -> None:
     run(command, env=env, cwd=root)
     if not server.is_file() or not os.access(server, os.X_OK):
         raise ConfigError(f"vLLM installation did not provide {server}")
+    link_cuda_wheels(install)
     atomic_write(metadata, str(server) + "\n")
     print(f"Prepared vLLM {version}: {server}")
 

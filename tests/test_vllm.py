@@ -271,6 +271,14 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(vllm.metadata_path(self.root).read_text().strip(), str(install / "bin" / "vllm"))
         self.assertIn("already prepared", output.getvalue())
 
+    def test_cuda_wheels_get_a_linkable_toolkit_layout(self):
+        toolkit = self.root / "venv" / "lib" / "python3.12" / "site-packages" / "nvidia" / "cu13"
+        (toolkit / "lib").mkdir(parents=True)
+        (toolkit / "lib" / "libcudart.so.13").write_text("")
+        vllm.link_cuda_wheels(self.root / "venv")
+        vllm.link_cuda_wheels(self.root / "venv")
+        self.assertEqual((toolkit / "lib64" / "libcudart.so").resolve(), (toolkit / "lib" / "libcudart.so.13").resolve())
+
 
 class MiddlewareTests(unittest.TestCase):
     def setUp(self):

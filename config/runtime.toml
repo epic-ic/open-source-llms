@@ -15,7 +15,9 @@ sha256 = "7713c7c7a74cf63e8e55e180aeb04b186d105f94b60ac3261cde0105cf1c7e2c"
 [vllm]
 version = "0.30.0"
 python = "3.12"
-# Extra requirements installed alongside vLLM, e.g. ["transformers>=5.8"].
-packages = []
+# Extra requirements installed alongside vLLM, e.g. ["transformers>=5.19.0"].
+# Pin the CUDA compiler wheels to the runtime torch pins (13.0): tilelang only asks
+# for nvidia-cuda-nvcc>=13, and a newer nvcc rejects the 13.0 runtime headers.
+packages = ["nvidia-cuda-nvcc==13.0.88.*", "nvidia-cuda-crt==13.0.88.*", "nvidia-nvvm==13.0.88.*"]
 # uv --torch-backend (e.g. "cu129"); unset uses the PyPI torch build vLLM pins.
 # torch_backend = "cu129"
