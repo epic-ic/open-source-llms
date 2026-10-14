@@ -137,8 +137,11 @@ uv run llm-prepare my-model
    Python under `.tools/python`, so compute nodes can run the same interpreter.
    This runs once per version (several GB); later runs reuse it. Change the pin
    to upgrade; the old environment is left in place. `packages` adds extra pins
-   (e.g. a newer `transformers`), and `torch_backend` passes uv's `--torch-backend`
-   (e.g. `cu129`) when the default PyPI torch build does not suit your driver.
+   (e.g. a newer `transformers`), `overrides` replaces vLLM's own pins via uv's
+   `--overrides` (e.g. `flashinfer-python==0.7.1`), and `torch_backend` passes
+   uv's `--torch-backend` (e.g. `cu129`) when the default PyPI torch build does
+   not suit your driver. Changing `packages`, `overrides` or `torch_backend`
+   reinstalls into the same environment on the next prepare.
    Set `VLLM_BIN=/PATH/bin/vllm` to use your own install instead.
 2. **Weights.** Downloads the `[download]` repository on the login node into
    `directory`, then checks `config.json` and every shard listed in
