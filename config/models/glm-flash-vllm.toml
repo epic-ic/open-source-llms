@@ -1,0 +1,50 @@
+[model]
+name = "GLM-5.3-Flash NVFP4 (vLLM)"
+alias = "glm-5.3-flash"
+backend = "vllm"
+
+[download]
+repo = "nvidia/GLM-5.3-Flash-NVFP4"
+revision = "main"
+directory = "models/GLM-5.3-Flash-NVFP4"
+
+[server]
+port = 8001
+context_size = 262144
+parallel = 8
+max_output = 32768
+temperature = 1.0
+top_p = 0.95
+extra_args = [
+  "--enable-ep-weight-filter",
+  "--model-loader-extra-config",
+  '{"enable_multithread_load":true,"num_threads":16}',
+  # FlashInfer 0.7.0.post1's sm_120 NoPE decode autotune hits an illegal memory access.
+  "--no-enable-flashinfer-autotune",
+  "--moe-backend", "marlin",
+]
+
+[vllm]
+tensor_parallel_size = 8
+enable_expert_parallel = true
+gpu_memory_utilization = 0.92
+kv_cache_dtype = "fp8"
+max_num_batched_tokens = 8192
+enable_prefix_caching = true
+language_model_only = true
+reasoning_parser = "glm47"
+tool_call_parser = "glm47"
+# The checkpoint ships an MTP draft layer; enable after a first successful run.
+# speculative_config = { method = "mtp", num_speculative_tokens = 5 }
+
+[slurm]
+gpus = 8
+cpus_per_task = 64
+mem = "256G"
+gpu_type = "nvidia_rtx_pro_5000_blackwell"  # NVP4 needs blackwell GPUs
+time = "5-00:00:00"
+
+[capabilities]
+tools = true
+responses = true
+reasoning_efforts = ["low", "high", "max"]

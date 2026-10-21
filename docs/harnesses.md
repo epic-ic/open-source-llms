@@ -68,6 +68,8 @@ and the [configuration reference](https://learn.chatgpt.com/docs/config-file/con
 The pinned llama.cpp server exposes `/v1/responses` by translating requests to
 Chat Completions internally. That implementation is documented in the
 [server API reference](https://github.com/ggml-org/llama.cpp/blob/b11472/tools/server/README.md).
+vLLM implements `/v1/responses` natively, with tool calls handled by the profile's
+`vllm.tool_call_parser` and reasoning by `vllm.reasoning_parser`.
 Capabilities in a profile declare the intended API features; they do not certify
 an actual model's tool behavior or every client feature. Check streamed Responses
 and a real tool call/result loop before relying on a Codex workflow.
@@ -99,6 +101,9 @@ uv run llm-chat --model my-model --stream "Write a short Python function."
 uv run llm-chat --responses --stream "Explain this server in one sentence."
 printf '%s\n' 'Summarize this text.' | uv run llm-chat -
 ```
+
+Use `--reasoning-effort LEVEL` with `llm-chat` to set effort for that request.
+Choose a level supported by the model; this flag does not change server defaults.
 
 `--profile my-model` selects its port, alias, and output budget. `--model` overrides
 the alias; `--base-url` overrides `LLM_BASE_URL`. `LLM_MODEL` is another alias

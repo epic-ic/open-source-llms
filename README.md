@@ -4,9 +4,10 @@ Prepare and serve open source models on a Slurm GPU cluster, then use their
 OpenAI-compatible endpoints from Python, OpenCode, Codex, or another agent harness.
 
 Models live in small TOML profiles. Downloads, authentication, Slurm submission,
-SSH tunnels, and client configuration share one implementation. The built-in
-backend serves GGUF models with llama.cpp; the script backend supports other
-engines, with a vLLM example included.
+SSH tunnels, and client configuration share one implementation. Two engines are
+built in: llama.cpp serves GGUF models and vLLM serves Hugging Face (safetensors)
+checkpoints. Both are installed and pinned by this repository. A script backend
+supports any other engine.
 
 ## Quick start
 
@@ -110,9 +111,7 @@ interpreter, which the batch wrapper invokes directly with the frozen job settin
 Sync the environment on the login node before submission.
 
 If the checkout is a member of a parent uv workspace, uv uses that workspace's
-environment, lockfile, and Python constraints. This cluster checkout belongs to
-the parent `code` workspace, which currently selects Python 3.15. The same
-`uv sync` and `uv run llm-*` commands work there. See
+environment, lockfile, and Python constraints. See
 [uv workspaces](https://docs.astral.sh/uv/concepts/projects/workspaces/).
 
 ## Add a model
@@ -130,19 +129,20 @@ For a split GGUF, give `--file` the first shard; initialization selects all shar
 for download. For existing weights, use `uv run llm-init my-model --model-file /PATH/model.gguf`.
 No model-specific Python or Slurm script is needed.
 
-For another serving engine:
+For a safetensors checkpoint with vLLM:
 
 ```bash
-uv run llm-init my-model --backend script --repo ORG/MODEL \
-  --serve-script examples/backends/vllm.sh
-# Install a suitable vLLM environment and set VLLM_BIN to its executable.
-# Edit the profile and add model-specific engine options.
-uv run llm-prepare my-model
+uv run llm-init my-model --backend vllm --repo ORG/MODEL
+# Edit config/models/my-model.toml: [server] context/concurrency, [vllm] engine options.
+uv run llm-prepare my-model   # installs the pinned vLLM once, then downloads weights
 uv run llm-submit my-model
 ```
 
-You can supply your own Bash preparation and serving scripts. See
-[adding models and backends](docs/models.md) for the script contract and examples.
+The included vLLM profiles show model-specific parser and engine settings. Choose
+resources for your hardware; see [vLLM models](docs/models.md#vllm-models).
+
+For another engine, write a Bash serve script (`--backend script --serve-script PATH`).
+See [adding models and backends](docs/models.md) for the script contract.
 
 ## Connect agent harnesses
 
@@ -167,31 +167,39 @@ requires both. See [harness setup and API examples](docs/harnesses.md).
 
 ## Included profiles
 
-These preserve the original model choices and resource requests. Resource sizes
-are starting configurations; choose weights and context that fit your hardware.
-Tracked profiles have no fixed cluster node, account, partition, or GPU type.
+Resource sizes are starting configurations; choose weights and context that fit
+your hardware. Profiles leave cluster node, account, and partition unset. The GLM
+NVFP4 profile selects a Blackwell GPU type; match `gpu_type` to your scheduler's
+names in `config/cluster.local.toml` or pass `--gpu-type` when submitting.
 
-| Profile     | API model            |
-| ----------- | -------------------- |
-| `qwen-27b`  | `qwen3.8-27b`        |
-| `qwen-next` | `qwen3.8-flash-next` |
-| `glm-flash` | `glm-5.3-flash`      |
+| Profile          | Backend   | API model            |
+| ---------------- | --------- | -------------------- |
+| `qwen-27b`       | llama.cpp | `qwen3.8-27b`        |
+| `qwen-27b-vllm`  | vLLM      | `qwen3.8-27b`        |
+| `qwen-next`      | llama.cpp | `qwen3.8-flash-next` |
+| `glm-flash`      | llama.cpp | `glm-5.3-flash`      |
+| `glm-flash-vllm` | vLLM      | `glm-5.3-flash`      |
 
 Shared runtime downloads remain pinned to llama.cpp `b11472` with CUDA 12.8 and
 verified SHA-256 hashes. Those binaries require Linux x86_64 and a compatible
 NVIDIA driver. Set `LLAMA_SERVER=/PATH/llama-server` to use your own build.
+vLLM is pinned to the version in `config/runtime.toml` and installed with uv into
+`.tools/vllm/VERSION-HASH`, where the hash identifies the install settings.
+Set `VLLM_BIN=/PATH/bin/vllm` to use your own install.
 
 ## Layout
 
 ```text
 config/models/         Model profiles: weights, resources, server options, capabilities
-config/runtime.toml    Shared runtime release and checksums
+config/runtime.toml    Pinned llama.cpp release/checksums and vLLM version
 uv.lock, .python-version  Locked project dependencies and Python version
 config/cluster.local.toml  Your cluster settings (ignored by Git)
 slurm_llm/             Configuration, preparation, backends, Slurm, clients, integrations
+slurm_llm/vllm.py      vLLM installation and command construction
+slurm_llm/vllm_middleware/  Authentication loaded by vLLM's interpreter
 slurm_llm/commands/    Independent command parsers, handlers, and entry points
 slurm/serve.sbatch      One batch entry point for every model
-examples/              GGUF/script profile templates and a vLLM adapter
+examples/              GGUF, vLLM, and script profile templates; a script backend template
 scripts/prepare.sh     Optional Bash wrapper for `uv run llm-prepare PROFILE`
 docs/                  Model extension, harness setup, operations
 tests/                 Unit and local HTTP integration tests
@@ -205,7 +213,9 @@ Development checks:
 uv run python -m unittest discover -s tests -v
 uv run ruff check .
 uv run ruff format --check .
-bash -n scripts/prepare.sh slurm/serve.sbatch examples/backends/vllm.sh
+for script in scripts/*.sh slurm/*.sbatch examples/backends/*.sh; do
+  bash -n "$script" || exit
+done
 ```
 
 The tests cover profile validation, shard completeness, credential retention,

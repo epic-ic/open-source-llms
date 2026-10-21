@@ -52,7 +52,7 @@ def server_options(parser: argparse.ArgumentParser, *, key_file: bool = True) ->
     parser.add_argument("--max-output", type=positive_int)
     parser.add_argument("--reasoning", choices=["on", "off", "auto"])
     parser.add_argument("--reasoning-effort")
-    parser.add_argument("--model-file", help="use existing GGUF weights")
+    parser.add_argument("--model-file", help="use existing weights: a GGUF file, or a vLLM model directory")
     if key_file:
         parser.add_argument("--api-key-file", help="path relative to --root, or absolute")
 
@@ -92,7 +92,7 @@ def get_profile(
         if frozen:
             supplied = [
                 key
-                for key in (*SERVER_OPTIONS, "model_file", "llama_server", "api_key_file")
+                for key in (*SERVER_OPTIONS, "model_file", "llama_server", "vllm", "api_key_file")
                 if getattr(args, key, None) is not None
             ]
             if supplied:
@@ -110,6 +110,16 @@ def get_profile(
     if getattr(args, "model_file", None):
         profile.model["file"] = str(resolve_path(root, args.model_file))
     return profile
+
+
+def executable(args: argparse.Namespace, profile: Profile) -> str | None:
+    """Return the runtime override that matches the profile's backend."""
+    values = {"llama.cpp": args.llama_server, "vllm": args.vllm}
+    for backend, value in values.items():
+        if value is not None and backend != profile.backend:
+            flag = "--llama-server" if backend == "llama.cpp" else "--vllm"
+            raise ConfigError(f"{flag} does not apply to a {profile.backend} profile")
+    return values.get(profile.backend)
 
 
 def base_url(args: argparse.Namespace, profile: Profile | None) -> str:

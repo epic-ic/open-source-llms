@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import re
 import tomllib
@@ -55,16 +56,69 @@ SECTIONS = {
     },
     "capabilities": {"tools", "responses", "reasoning_efforts"},
     "scripts": {"prepare", "serve"},
+    "vllm": {
+        "tensor_parallel_size",
+        "pipeline_parallel_size",
+        "enable_expert_parallel",
+        "gpu_memory_utilization",
+        "max_num_batched_tokens",
+        "dtype",
+        "quantization",
+        "kv_cache_dtype",
+        "enable_prefix_caching",
+        "enforce_eager",
+        "trust_remote_code",
+        "language_model_only",
+        "tool_call_parser",
+        "reasoning_parser",
+        "chat_template",
+        "chat_template_kwargs",
+        "generation_config",
+        "speculative_config",
+        "hf_overrides",
+        "env",
+    },
 }
+BACKENDS = ("llama.cpp", "vllm", "script")
 SERVER_DEFAULTS = {
     "host": "0.0.0.0",
     "port": 8000,
     "context_size": 8192,
     "parallel": 1,
     "max_output": 2048,
-    "gpu_layers": 99,
     "extra_args": [],
 }
+LLAMA_DEFAULTS = {"gpu_layers": 99}
+LLAMA_ONLY = {
+    "gpu_layers": "vLLM always loads the whole model on the GPUs",
+    "reasoning": "set vllm.chat_template_kwargs, e.g. { enable_thinking = false }",
+    "reasoning_effort": 'set vllm.chat_template_kwargs, e.g. { reasoning_effort = "low" }',
+    "split_mode": "use vllm.tensor_parallel_size or vllm.pipeline_parallel_size",
+    "tensor_split": "use vllm.tensor_parallel_size or vllm.pipeline_parallel_size",
+    "lazy_mode": "no vLLM equivalent",
+    "cache_type_k": "use vllm.kv_cache_dtype",
+    "cache_type_v": "use vllm.kv_cache_dtype",
+    "flash_attn": "vLLM selects its attention backend; override with vllm.env",
+}
+REQUIRED_DOWNLOAD = ("repo", "directory", "entrypoint")
+VLLM_INCLUDE = ("*.json", "*.safetensors", "*.jinja", "*.txt", "*.model", "*.tiktoken", "*.py")
+VLLM_STRINGS = (
+    "dtype",
+    "quantization",
+    "kv_cache_dtype",
+    "tool_call_parser",
+    "reasoning_parser",
+    "chat_template",
+    "generation_config",
+)
+VLLM_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+VLLM_FLAGS = (
+    "enable_prefix_caching",
+    "enable_expert_parallel",
+    "enforce_eager",
+    "trust_remote_code",
+    "language_model_only",
+)
 SLURM_DEFAULTS = {"gpus": 1, "cpus_per_task": 8, "mem": "64G", "time": "08:00:00"}
 SERVER_ENV = {
     "LLM_HOST": ("host", str),
@@ -124,7 +178,10 @@ def strings(value: Any, label: str) -> list[str]:
 
 
 def relative_path(value: str, label: str) -> str:
-    if not value or Path(value).is_absolute() or ".." in Path(value).parts:
+    if not isinstance(value, str) or not value:
+        raise ConfigError(f"{label} must be a nonempty path relative to the repository")
+    parts = Path(value).parts
+    if Path(value).is_absolute() or ".." in parts or (parts and parts[0].startswith("~")):
         raise ConfigError(f"{label} must be a nonempty path relative to the repository")
     return value
 
@@ -149,12 +206,13 @@ class Profile:
         model.setdefault("name", self.id)
         model.setdefault("alias", self.id)
         model.setdefault("backend", "llama.cpp")
-        if model["backend"] not in ("llama.cpp", "script"):
-            raise ConfigError("model.backend must be 'llama.cpp' or 'script'")
+        if model["backend"] not in BACKENDS:
+            raise ConfigError(f"model.backend must be one of: {', '.join(BACKENDS)}")
         for key, value in model.items():
             if not isinstance(value, str) or not value.strip():
                 raise ConfigError(f"model.{key} must be a nonempty string")
-        self.data["server"] = SERVER_DEFAULTS | self.data.get("server", {})
+        defaults = SERVER_DEFAULTS | (LLAMA_DEFAULTS if self.backend == "llama.cpp" else {})
+        self.data["server"] = defaults | self.data.get("server", {})
         self.data["slurm"] = SLURM_DEFAULTS | self.data.get("slurm", {})
         self.data["capabilities"] = {"tools": False, "responses": False} | self.data.get("capabilities", {})
         self.data.setdefault("scripts", {})
@@ -163,7 +221,9 @@ class Profile:
             positive(server[key], f"server.{key}")
         if server["port"] > 65535:
             raise ConfigError("server.port must be at most 65535")
-        if server["context_size"] // server["parallel"] <= server["max_output"]:
+        if self.context_per_request <= server["max_output"]:
+            if self.backend == "vllm":
+                raise ConfigError("max_output must be less than context_size")
             raise ConfigError("max_output must be less than context_size / parallel")
         strings(server["extra_args"], "server.extra_args")
         if "reasoning" in server and server["reasoning"] not in ("on", "off", "auto"):
@@ -208,12 +268,20 @@ class Profile:
             raise ConfigError("A script backend requires scripts.serve")
         if self.backend == "llama.cpp" and "file" not in model and not self.download:
             raise ConfigError("A llama.cpp profile requires model.file or a download section")
+        if self.backend == "vllm":
+            self.validate_vllm()
+        elif "vllm" in self.data:
+            raise ConfigError("[vllm] only applies to backend = 'vllm'")
         if self.download:
-            for key in ("repo", "directory", "entrypoint"):
+            required = ("repo", "directory") if self.backend == "vllm" else REQUIRED_DOWNLOAD
+            for key in required:
                 if not isinstance(self.download.get(key), str) or not self.download[key]:
                     raise ConfigError(f"download.{key} is required")
             for key in ("directory", "entrypoint"):
-                relative_path(self.download[key], f"download.{key}")
+                if key in self.download:
+                    relative_path(self.download[key], f"download.{key}")
+            if self.backend == "vllm":
+                self.download.setdefault("include", list(VLLM_INCLUDE))
             if not self.download.get("include"):
                 raise ConfigError("download.include must select at least one file")
             strings(self.download["include"], "download.include")
@@ -221,6 +289,48 @@ class Profile:
                 relative_path(pattern, "download.include")
             if "revision" in self.download and not isinstance(self.download["revision"], str):
                 raise ConfigError("download.revision must be a string")
+
+    def validate_vllm(self) -> None:
+        model, server, settings = self.model, self.server, self.vllm
+        if "file" not in model and "repo" not in model and not self.download:
+            raise ConfigError("A vLLM profile requires a download section, model.repo, or model.file")
+        for key, hint in LLAMA_ONLY.items():
+            if key in server:
+                raise ConfigError(f"server.{key} is llama.cpp-only; {hint}")
+        for key in ("tensor_parallel_size", "pipeline_parallel_size", "max_num_batched_tokens"):
+            if key in settings:
+                positive(settings[key], f"vllm.{key}")
+        if "gpu_memory_utilization" in settings:
+            value = settings["gpu_memory_utilization"]
+            if type(value) not in {int, float} or not 0 < value <= 1:
+                raise ConfigError("vllm.gpu_memory_utilization must be in (0, 1]")
+        for key in VLLM_STRINGS:
+            if key in settings and (not isinstance(settings[key], str) or not settings[key].strip()):
+                raise ConfigError(f"vllm.{key} must be a nonempty string")
+        for key in VLLM_FLAGS:
+            if key in settings and type(settings[key]) is not bool:
+                raise ConfigError(f"vllm.{key} must be true or false")
+        for key in ("chat_template_kwargs", "speculative_config", "hf_overrides", "env"):
+            if key in settings and not isinstance(settings[key], dict):
+                raise ConfigError(f"vllm.{key} must be a table")
+            if key in settings:
+                try:
+                    json.dumps(settings[key], allow_nan=False)
+                except (TypeError, ValueError) as exc:
+                    raise ConfigError(f"vllm.{key} must contain JSON-compatible values") from exc
+        for name, value in settings.get("env", {}).items():
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or not isinstance(value, str):
+                raise ConfigError("vllm.env must map variable names to strings")
+            if name in {"VLLM_API_KEY", "PYTHONPATH"}:
+                raise ConfigError(f"vllm.env cannot set {name}")
+        unknown = set(self.capabilities.get("reasoning_efforts", [])) - set(VLLM_EFFORTS)
+        if unknown:
+            raise ConfigError(f"vLLM rejects reasoning effort(s): {', '.join(sorted(unknown))}")
+        if self.capabilities["tools"] and not (
+            "tool_call_parser" in settings
+            or any(arg.split("=", 1)[0] == "--tool-call-parser" for arg in server["extra_args"])
+        ):
+            raise ConfigError("capabilities.tools requires vllm.tool_call_parser for vLLM")
 
     @property
     def model(self) -> dict[str, Any]:
@@ -251,7 +361,13 @@ class Profile:
         return self.data.get("download", {})
 
     @property
+    def vllm(self) -> dict[str, Any]:
+        return self.data.get("vllm", {})
+
+    @property
     def context_per_request(self) -> int:
+        if self.backend == "vllm":
+            return self.server["context_size"]
         return self.server["context_size"] // self.server["parallel"]
 
     def format_download(self, value: str, quant: str | None = None) -> str:
@@ -302,6 +418,8 @@ def effective_profile(
     if use_env:
         for variable, (key, convert) in SERVER_ENV.items():
             if variable not in os.environ:
+                continue
+            if profile.backend == "vllm" and key in LLAMA_ONLY:
                 continue
             try:
                 value = convert(os.environ[variable])

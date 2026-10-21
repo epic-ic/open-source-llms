@@ -15,6 +15,8 @@ from slurm_llm.commands.health import main as health_main
 from slurm_llm.commands.models import main as models_main
 from slurm_llm.config import ConfigError
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
@@ -158,6 +160,28 @@ class ClientTests(unittest.TestCase):
                 )
         self.assertEqual(status, 0)
         self.assertEqual(output.getvalue(), "hello\n")
+
+    def test_reasoning_effort_stays_a_request_option_under_a_profile(self):
+        with patch.dict(os.environ, {"LLM_API_KEY": "test-key"}, clear=True):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                status = main(
+                    [
+                        "--root",
+                        str(ROOT),
+                        "hello",
+                        "--profile",
+                        "glm-flash-vllm",
+                        "--base-url",
+                        self.url,
+                        "--reasoning-effort",
+                        "low",
+                    ]
+                )
+        self.assertEqual(status, 0)
+        path, body = self.server.received[-1]
+        self.assertEqual(path, "/v1/chat/completions")
+        self.assertEqual(body["reasoning_effort"], "low")
 
     def test_health_does_not_require_authentication(self):
         Client(self.url).health()

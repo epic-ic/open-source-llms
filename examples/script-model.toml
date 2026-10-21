@@ -1,19 +1,19 @@
-# Copy to config/models/my-model.toml, or use `llm init --backend script`.
+# Copy to config/models/my-model.toml, or use `uv run llm-init --backend script`.
 [model]
-name = "My model with vLLM"
+name = "My model with a custom engine"
 alias = "my-model"
 backend = "script"
-repo = "ORG/MODEL_REPOSITORY" # Replace with a model supported by your vLLM version.
+repo = "ORG/MODEL_REPOSITORY"
 
 [scripts]
-serve = "examples/backends/vllm.sh"
+serve = "examples/backends/custom.sh"
 # prepare = "scripts/models/prepare-my-model.sh"
 
 [server]
 context_size = 8192
 max_output = 2048
 parallel = 1
-# Add flags for the selected model, e.g. --enable-auto-tool-choice and its tool parser.
+# Engine-specific flags, passed to the serve script as positional arguments.
 extra_args = []
 
 [slurm]

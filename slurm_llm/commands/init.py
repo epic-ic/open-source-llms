@@ -1,11 +1,19 @@
-"""Create a new GGUF or script model profile."""
+"""Create a new GGUF, vLLM, or script model profile."""
 
 import argparse
 import json
 from pathlib import Path
 
 from ..cli import command_parser, run_cli, server_options, write_output
-from ..config import SERVER_DEFAULTS, SLURM_DEFAULTS, ConfigError, Profile, project_root, valid_id
+from ..config import (
+    SERVER_DEFAULTS,
+    SLURM_DEFAULTS,
+    VLLM_INCLUDE,
+    ConfigError,
+    Profile,
+    project_root,
+    valid_id,
+)
 from ..weights import SHARD
 
 
@@ -14,7 +22,9 @@ def parser() -> argparse.ArgumentParser:
     cli.add_argument("name")
     cli.add_argument("--repo", help="Hugging Face repository")
     cli.add_argument("--file", help="GGUF path inside the HF repository")
-    cli.add_argument("--backend", choices=["llama.cpp", "script"], default="llama.cpp")
+    cli.add_argument("--backend", choices=["llama.cpp", "vllm", "script"], default="llama.cpp")
+    cli.add_argument("--tool-call-parser", help="vLLM tool parser, e.g. hermes or qwen3_coder")
+    cli.add_argument("--reasoning-parser", help="vLLM reasoning parser, e.g. qwen3")
     cli.add_argument("--serve-script", help="Bash script path relative to repository root")
     cli.add_argument("--prepare-script", help="optional Bash preparation script")
     cli.add_argument("--tools", action="store_true", help="declare verified tool-call support")
@@ -32,10 +42,15 @@ def execute(args: argparse.Namespace) -> None:
                 raise ConfigError("Use --model-file or --repo with --file")
         elif not args.repo or not args.file:
             raise ConfigError("Provide --repo with --file, or --model-file")
-        if args.serve_script or args.prepare_script:
-            raise ConfigError("Script flags require --backend script")
+    elif args.backend == "vllm":
+        if bool(args.repo) == bool(args.model_file) or args.file:
+            raise ConfigError("Provide --repo (a safetensors repository) or --model-file DIRECTORY")
     elif not args.serve_script or args.file or args.model_file:
         raise ConfigError("A script profile needs --serve-script; GGUF file flags do not apply")
+    if args.backend != "script" and (args.serve_script or args.prepare_script):
+        raise ConfigError("Script flags require --backend script")
+    if args.backend != "vllm" and (args.tool_call_parser or args.reasoning_parser):
+        raise ConfigError("Parser flags require --backend vllm")
     model = {"name": ident, "alias": ident, "backend": args.backend}
     if args.model_file:
         model["file"] = args.model_file
@@ -68,12 +83,24 @@ def execute(args: argparse.Namespace) -> None:
             "include": [pattern],
             "entrypoint": args.file,
         }
+    if args.backend == "vllm":
+        if args.repo:
+            data["download"] = {
+                "repo": args.repo,
+                "revision": "main",
+                "directory": f"models/{ident}",
+                "include": list(VLLM_INCLUDE),
+            }
+        data["vllm"] = {"gpu_memory_utilization": 0.9, "enable_prefix_caching": True}
+        for key in ("tool_call_parser", "reasoning_parser"):
+            if getattr(args, key):
+                data["vllm"][key] = getattr(args, key)
     if args.backend == "script":
         data["scripts"] = {"serve": args.serve_script}
         if args.prepare_script:
             data["scripts"]["prepare"] = args.prepare_script
-    Profile(ident, data)  # Fail before writing if the profile is inconsistent.
-    lines = ["# Edit resource, context, and capability settings for your model.\n"]
+    Profile(ident, data)
+    lines = []
     for section, values in data.items():
         lines.append(f"[{section}]")
         for key, value in values.items():

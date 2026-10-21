@@ -1,10 +1,11 @@
-"""Backend adapters: GGUF with llama.cpp, or a user-provided serving script."""
+"""Backend adapters: GGUF with llama.cpp, Hugging Face checkpoints with vLLM, or a script."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
+from . import vllm
 from .config import ConfigError, Profile
 from .credentials import ensure_key, read_key
 from .process import run
@@ -69,14 +70,22 @@ def prepare(
     runtime_only: bool = False,
     model_only: bool = False,
 ) -> None:
-    if profile.backend == "llama.cpp":
+    if profile.backend in ("llama.cpp", "vllm"):
         if not model_only:
-            prepare_runtime(root)
-        if not runtime_only:
+            if profile.backend == "vllm":
+                vllm.prepare_runtime(root)
+            else:
+                prepare_runtime(root)
+        hub_only = profile.backend == "vllm" and not profile.download and not profile.model.get("file")
+        if hub_only and not runtime_only:
+            if quant:
+                raise ConfigError("--quant requires a download section")
+            print(f"vLLM downloads {profile.model['repo']} into HF_HOME when the job starts")
+        elif not runtime_only:
             prepare_weights(root, profile, quant)
     else:
         if quant or runtime_only or model_only:
-            raise ConfigError("Script profiles use their prepare script; quant/runtime flags are GGUF-only")
+            raise ConfigError("Script profiles use their prepare script; quant/runtime flags do not apply")
         if "prepare" in profile.scripts:
             run(
                 ["bash", str(script_path(root, profile, "prepare"))],
@@ -98,12 +107,14 @@ def allocation_gpus(profile: Profile) -> int:
     visible = os.getenv("CUDA_VISIBLE_DEVICES", "")
     if visible and visible not in {"-1", "NoDevFiles"}:
         return len(visible.split(","))
-    raise ConfigError("Cannot determine GPU count; set server.tensor_split explicitly")
+    raise ConfigError("Cannot determine GPU count from SLURM_GPUS_ON_NODE or CUDA_VISIBLE_DEVICES")
 
 
 def server_command(
     root: Path, profile: Profile, key_file: Path, executable: str | None = None
 ) -> tuple[list[str], dict[str, str]]:
+    if profile.backend == "vllm":
+        return vllm.server_command(root, profile, key_file, allocation_gpus(profile), executable)
     read_key(key_file)
     if profile.backend == "script":
         return (

@@ -1,0 +1,42 @@
+[model]
+name = "Qwen3.8 27B FP8 (vLLM)"
+alias = "qwen3.8-27b"
+backend = "vllm"
+
+[download]
+repo = "Qwen/Qwen3.8-27B-FP8"
+revision = "main"
+directory = "models/Qwen3.8-27B-FP8"
+
+[server]
+port = 8000
+context_size = 131072
+parallel = 4
+max_output = 32768
+temperature = 1.0
+top_p = 0.95
+top_k = 20
+min_p = 0.0
+repeat_penalty = 1.0
+
+[vllm]
+gpu_memory_utilization = 0.92
+kv_cache_dtype = "fp8"
+enable_prefix_caching = true
+language_model_only = true
+reasoning_parser = "qwen3"
+tool_call_parser = "qwen3_coder"
+# Thinking is on by default; uncomment to answer directly unless a request sets an effort.
+# chat_template_kwargs = { enable_thinking = false }
+# The checkpoint ships an MTP draft head; enable after a first successful run.
+# speculative_config = { method = "mtp", num_speculative_tokens = 3 }
+
+[slurm]
+gpus = 1
+cpus_per_task = 8
+mem = "64G"
+
+[capabilities]
+tools = true
+responses = true
+reasoning_efforts = ["low", "medium", "xhigh"]

@@ -16,7 +16,11 @@ def parser() -> argparse.ArgumentParser:
     cli.add_argument("--model", help="API model ID; auto-discovered when omitted")
     cli.add_argument("--responses", action="store_true")
     cli.add_argument("--stream", action="store_true")
-    cli.add_argument("--reasoning-effort", help="request a model-supported effort level")
+    cli.add_argument(
+        "--reasoning-effort",
+        dest="request_reasoning_effort",
+        help="request a model-supported effort level",
+    )
     cli.add_argument("--max-tokens", type=positive_int)
     return cli
 
@@ -35,7 +39,7 @@ def execute(args: argparse.Namespace) -> None:
         prompt,
         maximum,
         responses=args.responses,
-        reasoning_effort=args.reasoning_effort,
+        reasoning_effort=args.request_reasoning_effort,
     )
     if args.stream:
         for chunk in client.stream(endpoint, body):
