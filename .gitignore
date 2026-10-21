@@ -12,3 +12,4 @@ build/
 dist/
 .ruff_cache/
 .pytest_cache/
+test-llama-*

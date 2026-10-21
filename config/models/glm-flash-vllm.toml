@@ -27,6 +27,7 @@ extra_args = [
   '{"enable_multithread_load":true,"num_threads":16}',
   # FlashInfer 0.7.0.post1's sm_120 NoPE decode autotune hits an illegal memory access.
   "--no-enable-flashinfer-autotune",
+  "--moe-backend", "marlin"
 ]
 
 [vllm]
@@ -45,7 +46,7 @@ language_model_only = true
 reasoning_parser = "glm47"
 tool_call_parser = "glm47"
 # The checkpoint ships an MTP draft layer; enable after a first successful run.
-# speculative_config = { method = "mtp", num_speculative_tokens = 3 }
+# speculative_config = { method = "mtp", num_speculative_tokens = 5 }
 
 [slurm]
 gpus = 8
