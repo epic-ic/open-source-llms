@@ -93,3 +93,11 @@ class ConfigTests(unittest.TestCase):
         for value in ("~/weights", "~user/weights"):
             with self.subTest(value=value), self.assertRaises(ConfigError):
                 Profile("custom", {"model": {"backend": "script"}, "scripts": {"serve": value}})
+
+    def test_download_paths_must_be_strings(self):
+        for key in ("directory", "entrypoint"):
+            with self.subTest(key=key), self.assertRaises(ConfigError):
+                Profile(
+                    "custom",
+                    {"download": {"repo": "org/model", "directory": "models", "entrypoint": "model.gguf", key: 1}},
+                )

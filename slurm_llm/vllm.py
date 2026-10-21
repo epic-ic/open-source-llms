@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -34,15 +35,14 @@ JSON_FLAGS = {
     "speculative_config": "--speculative-config",
     "hf_overrides": "--hf-overrides",
 }
-# Profile sampling keys that vLLM accepts as server defaults (--override-generation-config).
 SAMPLING = {
     "temperature": "temperature",
     "top_p": "top_p",
     "top_k": "top_k",
     "min_p": "min_p",
+    "presence_penalty": "presence_penalty",
     "repeat_penalty": "repetition_penalty",
 }
-# Directory holding only the stdlib auth middleware, put on vLLM's PYTHONPATH.
 MIDDLEWARE_PATH = Path(__file__).resolve().parent / "vllm_middleware"
 MIDDLEWARE = "slurm_llm_auth.BearerAuth"
 
@@ -58,21 +58,18 @@ def runtime_command(root: Path, override: str | None = None) -> tuple[Path, dict
         if not metadata.is_file():
             raise ConfigError("Prepare vLLM with 'uv run llm-prepare PROFILE' or set VLLM_BIN")
         executable = metadata.read_text().strip()
-    if os.sep not in executable and shutil.which(executable):
+    if os.sep not in executable:
         executable = shutil.which(executable) or executable
     server = resolve_path(root, executable)
     if not server.is_file() or not os.access(server, os.X_OK):
         raise ConfigError(f"Cannot execute vllm: {server}")
     env = dict(os.environ)
-    # The job inherits the slurm-llm environment from submission; run vLLM in its own.
     env.pop("VIRTUAL_ENV", None)
-    env.pop("VLLM_BIN", None)  # vLLM warns about VLLM_* variables it does not know.
+    env.pop("VLLM_BIN", None)
     venv = server.parent.parent
     if (venv / "pyvenv.cfg").is_file():
         env["VIRTUAL_ENV"] = str(venv)
         paths = [str(server.parent)]
-        # vLLM disables FlashInfer when nvcc is missing, since it JIT-compiles kernels
-        # (e.g. sparse MLA on sm_120). The nvidia-cuda-nvcc wheel ships one in the venv.
         nvcc = next(iter(sorted(venv.glob("lib/python*/site-packages/nvidia/cu*/bin/nvcc"))), None)
         if nvcc:
             env.setdefault("CUDA_HOME", str(nvcc.parent.parent))
@@ -82,8 +79,7 @@ def runtime_command(root: Path, override: str | None = None) -> tuple[Path, dict
 
 
 def link_cuda_wheels(install: Path) -> None:
-    # JIT builds (FlashInfer) link with -L$CUDA_HOME/lib64 -lcudart -lnvrtc, but the
-    # CUDA wheels ship lib/ and only versioned sonames (libcudart.so.N, libnvrtc.so.N).
+    """Expose wheel libraries under the paths and names CUDA JIT linkers expect."""
     for toolkit in install.glob("lib/python*/site-packages/nvidia/cu*"):
         lib = toolkit / "lib"
         if not lib.is_dir():
@@ -96,40 +92,54 @@ def link_cuda_wheels(install: Path) -> None:
                 unversioned.symlink_to(versioned.name)
 
 
+def runtime_settings(root: Path) -> dict:
+    settings = read_toml(root / "config" / "runtime.toml").get("vllm")
+    if not isinstance(settings, dict) or not isinstance(settings.get("version"), str):
+        raise ConfigError("config/runtime.toml requires a [vllm] table with a version")
+    unknown = settings.keys() - {"version", "python", "packages", "torch_backend"}
+    if unknown:
+        raise ConfigError(f"Unknown vllm runtime setting(s): {', '.join(sorted(unknown))}")
+    version = settings["version"]
+    if not re.fullmatch(r"[0-9][0-9A-Za-z.+-]*", version):
+        raise ConfigError("vllm.version must be a release version")
+    python = settings.setdefault("python", "3.12")
+    packages = settings.setdefault("packages", [])
+    backend = settings.get("torch_backend")
+    if not isinstance(python, str) or not python.strip():
+        raise ConfigError("vllm.python must be a nonempty string")
+    if not isinstance(packages, list) or any(
+        not isinstance(item, str) or not item.strip() or item.startswith("-") for item in packages
+    ):
+        raise ConfigError("vllm.packages must be package requirements")
+    if backend is not None and (not isinstance(backend, str) or not backend.strip()):
+        raise ConfigError("vllm.torch_backend must be a nonempty string")
+    return settings
+
+
 def prepare_runtime(root: Path) -> None:
     if os.getenv("VLLM_BIN"):
         server, _ = runtime_command(root)
         print(f"Using VLLM_BIN: {server}")
         return
-    settings = read_toml(root / "config" / "runtime.toml").get("vllm")
-    if not isinstance(settings, dict) or not isinstance(settings.get("version"), str):
-        raise ConfigError("config/runtime.toml requires a [vllm] table with a version")
+    settings = runtime_settings(root)
     version = settings["version"]
-    if not re.fullmatch(r"[0-9][0-9A-Za-z.+-]*", version):
-        raise ConfigError("vllm.version must be a release version such as 0.30.0")
-    python = settings.get("python", "3.12")
-    packages = settings.get("packages", [])
-    backend = settings.get("torch_backend")
-    if not isinstance(python, str) or not isinstance(packages, list):
-        raise ConfigError("vllm.python must be a string and vllm.packages an array")
-    if any(not isinstance(item, str) or item.startswith("-") for item in packages):
-        raise ConfigError("vllm.packages must be package requirements")
-    if backend is not None and not isinstance(backend, str):
-        raise ConfigError("vllm.torch_backend must be a string")
-    install = root / ".tools" / "vllm" / version
+    encoded = compact(settings) + "\n"
+    fingerprint = hashlib.sha256(encoded.encode()).hexdigest()[:12]
+    install = root / ".tools" / "vllm" / f"{version}-{fingerprint}"
     server = install / "bin" / "vllm"
     metadata = metadata_path(root)
-    if server.is_file() and metadata.is_file() and resolve_path(root, metadata.read_text().strip()) == server.resolve():
+    marker = install / "settings.json"
+    if server.is_file() and os.access(server, os.X_OK) and marker.is_file() and marker.read_text() == encoded:
         link_cuda_wheels(install)
+        atomic_write(metadata, str(server) + "\n")
         print(f"vLLM already prepared: {server}")
         return
     env = dict(os.environ)
     env.pop("VIRTUAL_ENV", None)
-    # Keep the interpreter, venv, and wheel cache on storage that compute nodes share.
     env.setdefault("UV_CACHE_DIR", str(root / ".cache" / "uv"))
     env.setdefault("UV_PYTHON_INSTALL_DIR", str(root / ".tools" / "python"))
     if not (install / "bin" / "python").exists():
-        run(["uv", "venv", "--managed-python", "--python", python, str(install)], env=env)
+        run(["uv", "venv", "--managed-python", "--python", settings["python"], str(install)], env=env, cwd=root)
     command = [
         "uv",
         "pip",
@@ -137,14 +147,15 @@ def prepare_runtime(root: Path) -> None:
         "--python",
         str(install / "bin" / "python"),
         f"vllm=={version}",
-        *packages,
+        *settings["packages"],
     ]
-    if backend:
-        command.extend(["--torch-backend", backend])
+    if settings.get("torch_backend"):
+        command.extend(["--torch-backend", settings["torch_backend"]])
     run(command, env=env, cwd=root)
     if not server.is_file() or not os.access(server, os.X_OK):
         raise ConfigError(f"vLLM installation did not provide {server}")
     link_cuda_wheels(install)
+    atomic_write(marker, encoded)
     atomic_write(metadata, str(server) + "\n")
     print(f"Prepared vLLM {version}: {server}")
 
@@ -195,7 +206,11 @@ def server_command(
         enabled = settings["enable_prefix_caching"]
         command.append("--enable-prefix-caching" if enabled else "--no-enable-prefix-caching")
     if "tool_call_parser" in settings:
-        command.extend(["--enable-auto-tool-choice", "--tool-call-parser", settings["tool_call_parser"]])
+        command.extend(["--tool-call-parser", settings["tool_call_parser"]])
+    if "tool_call_parser" in settings or any(
+        arg.split("=", 1)[0] == "--tool-call-parser" for arg in options["extra_args"]
+    ):
+        command.append("--enable-auto-tool-choice")
     if "chat_template" in settings:
         template = resolve_path(root, settings["chat_template"])
         if not template.is_file():
@@ -204,19 +219,16 @@ def server_command(
     for key_name, flag in JSON_FLAGS.items():
         if key_name in settings:
             command.extend([flag, compact(settings[key_name])])
-    # Server-side defaults for requests that omit them; max_new_tokens is max_tokens.
     generation = {name: options[source] for source, name in SAMPLING.items() if source in options}
     generation["max_new_tokens"] = options["max_output"]
     command.extend(["--override-generation-config", compact(generation)])
     command.extend(["--middleware", MIDDLEWARE, *options["extra_args"]])
 
     env.update(settings.get("env", {}))
-    # The key travels in the environment, never argv, so it stays out of ps and logs.
     env["VLLM_API_KEY"] = key
     env["PYTHONPATH"] = os.pathsep.join(path for path in (str(MIDDLEWARE_PATH), env.get("PYTHONPATH")) if path)
     env.setdefault("HF_HOME", str(root / ".cache" / "huggingface"))
     env.setdefault("VLLM_NO_USAGE_STATS", "1")
     if Path(command[2]).is_absolute():
-        # Prepared weights are local; compute nodes need not reach the Hub.
         env.setdefault("HF_HUB_OFFLINE", "1")
     return command, env

@@ -79,21 +79,24 @@ uv run llm-prepare my-model --runtime-only
 uv run llm-prepare my-model --model-only
 LLAMA_SERVER=/SHARED/bin/llama-server uv run llm-prepare my-model
 uv run llm-prepare qwen-next --quant UD-Q5_K_XL
-uv run llm-prepare qwen-27b-vllm --runtime-only   # vLLM into .tools/vllm/VERSION
+uv run llm-prepare qwen-27b-vllm --runtime-only
 VLLM_BIN=/SHARED/venv/bin/vllm uv run llm-prepare qwen-27b-vllm
 ```
 
-Runtime archive checksums and extraction filtering are enforced when installing.
-Existing matching runtime installs are reused. To change a release, update
+llama.cpp archive checksums and extraction filtering are enforced when installing.
+Existing matching installs are reused. To change its release, update
 `config/runtime.toml`, including both archive hashes and the install directory.
 A custom `LLAMA_SERVER` uses your own library environment; matching prepared
 binaries retain their recorded library paths, including through job snapshots.
 The vLLM environment, its uv-managed Python (`.tools/python`), and the uv cache
-(`.cache/uv`) all live in the checkout so compute nodes see them. Changing
-`[vllm] version` installs a new environment next to the old one; queued jobs keep
-the executable recorded in their snapshot. vLLM also compiles CUDA graphs on first
-start and caches them under `~/.cache/vllm` (`VLLM_CACHE_ROOT`), so the second
-start of the same profile is faster.
+(`.cache/uv`) default to shared storage in the checkout. Set
+`UV_PYTHON_INSTALL_DIR` to override the interpreter location or `UV_CACHE_DIR`
+to override the cache location.
+Changing any vLLM install setting selects a new `.tools/vllm/VERSION-HASH`
+environment; queued jobs retain their previous executable. The prepared runtime
+exposes a wheel-provided CUDA compiler and linkable CUDA libraries for JIT kernels.
+vLLM's compilation cache location can be set with `VLLM_CACHE_ROOT`; CUDA graph
+capture still happens during startup.
 
 Leave every shard of a split model together. Allow enough shared storage for
 weights, partial downloads, and runtime archives. GPU memory also needs room

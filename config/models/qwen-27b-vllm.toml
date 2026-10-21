@@ -1,5 +1,3 @@
-# Qwen3.8 27B served by vLLM from the official FP8 checkpoint (~29 GiB).
-# Sized for one 48 GB GPU; context_size is per request (vLLM shares one paged KV cache).
 [model]
 name = "Qwen3.8 27B FP8 (vLLM)"
 alias = "qwen3.8-27b"
@@ -7,7 +5,7 @@ backend = "vllm"
 
 [download]
 repo = "Qwen/Qwen3.8-27B-FP8"
-revision = "main" # Use a commit ID to make downloads reproducible.
+revision = "main"
 directory = "models/Qwen3.8-27B-FP8"
 
 [server]
@@ -15,7 +13,6 @@ port = 8000
 context_size = 131072
 parallel = 4
 max_output = 32768
-# Thinking-mode sampling from the model card; requests may override them.
 temperature = 1.0
 top_p = 0.95
 top_k = 20
@@ -26,7 +23,6 @@ repeat_penalty = 1.0
 gpu_memory_utilization = 0.92
 kv_cache_dtype = "fp8"
 enable_prefix_caching = true
-# Text-only serving: skip the vision tower and give its memory to the KV cache.
 language_model_only = true
 reasoning_parser = "qwen3"
 tool_call_parser = "qwen3_coder"

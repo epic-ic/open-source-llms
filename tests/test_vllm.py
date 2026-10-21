@@ -3,7 +3,6 @@ import contextlib
 import io
 import json
 import os
-import sys
 import tempfile
 import unittest
 from importlib import import_module
@@ -11,14 +10,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from slurm_llm import vllm
-from slurm_llm.backends import prepare, server_command
+from slurm_llm.backends import server_command
 from slurm_llm.config import ConfigError, Profile, effective_profile, load_profile
 from slurm_llm.credentials import ensure_key, read_key
 from slurm_llm.slurm import snapshot
+from slurm_llm.vllm_middleware.slurm_llm_auth import BearerAuth
 from slurm_llm.weights import validate_checkpoint
-
-sys.path.insert(0, str(vllm.MIDDLEWARE_PATH))
-from slurm_llm_auth import BearerAuth  # noqa: E402
 
 
 def vllm_profile(**sections):
@@ -39,7 +36,6 @@ class ProfileTests(unittest.TestCase):
             ("reasoning", "off", "chat_template_kwargs"),
             ("cache_type_k", "q8_0", "kv_cache_dtype"),
             ("tensor_split", "1,1", "tensor_parallel_size"),
-            ("presence_penalty", 1.5, "per request"),
         ):
             with self.subTest(key=key), self.assertRaisesRegex(ConfigError, hint):
                 vllm_profile(server={key: value})
@@ -54,19 +50,23 @@ class ProfileTests(unittest.TestCase):
             {"env": {"VLLM_API_KEY": "leak"}},
             {"env": {"BAD NAME": "x"}},
             {"max_model_len": 4096},
+            {"hf_overrides": {"value": float("nan")}},
+            {"speculative_config": {"value": object()}},
         ):
             with self.subTest(settings=settings), self.assertRaises(ConfigError):
                 vllm_profile(vllm=settings)
 
     def test_vllm_section_requires_vllm_backend(self):
-        with self.assertRaisesRegex(ConfigError, "only applies"):
-            Profile("gguf", {"model": {"file": "model.gguf"}, "vllm": {"enforce_eager": True}})
+        for settings in ({}, {"enforce_eager": True}):
+            with self.subTest(settings=settings), self.assertRaisesRegex(ConfigError, "only applies"):
+                Profile("gguf", {"model": {"file": "model.gguf"}, "vllm": settings})
 
     def test_tools_require_a_parser(self):
         with self.assertRaisesRegex(ConfigError, "tool_call_parser"):
             vllm_profile(capabilities={"tools": True})
         vllm_profile(capabilities={"tools": True}, vllm={"tool_call_parser": "hermes"})
         vllm_profile(capabilities={"tools": True}, server={"extra_args": ["--tool-call-parser", "x"]})
+        vllm_profile(capabilities={"tools": True}, server={"extra_args": ["--tool-call-parser=hermes"]})
 
     def test_reasoning_efforts_must_be_accepted_by_vllm(self):
         with self.assertRaisesRegex(ConfigError, "ultra"):
@@ -124,6 +124,29 @@ class CheckpointTests(unittest.TestCase):
         (self.model / "consolidated.safetensors").write_bytes(b"x")
         validate_checkpoint(self.model)
 
+    def test_malformed_indexes_report_configuration_errors(self):
+        (self.model / "config.json").write_text("{}")
+        index = self.model / "model.safetensors.index.json"
+        for value in ([], {}, {"weight_map": {}}, {"weight_map": []}, {"weight_map": {"a": ["file"]}}):
+            with self.subTest(value=value), self.assertRaisesRegex(ConfigError, "weight_map"):
+                index.write_text(json.dumps(value))
+                validate_checkpoint(self.model)
+
+    def test_index_cannot_reference_weights_outside_the_checkpoint(self):
+        (self.model / "config.json").write_text("{}")
+        other = self.model.parent / "other.safetensors"
+        other.write_bytes(b"x")
+        for shard in (str(other), "../other.safetensors", ""):
+            with self.subTest(shard=shard), self.assertRaisesRegex(ConfigError, "relative shard"):
+                (self.model / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"a": shard}}))
+                validate_checkpoint(self.model)
+
+    def test_a_directory_with_a_weight_suffix_is_not_a_checkpoint(self):
+        (self.model / "config.json").write_text("{}")
+        (self.model / "model.safetensors").mkdir()
+        with self.assertRaisesRegex(ConfigError, "No model weights"):
+            validate_checkpoint(self.model)
+
 
 class LaunchTests(unittest.TestCase):
     def setUp(self):
@@ -155,7 +178,13 @@ class LaunchTests(unittest.TestCase):
     def test_command_maps_profile_settings(self):
         selected = vllm_profile(
             model={"file": str(self.model)},
-            server={"context_size": 65536, "parallel": 4, "max_output": 8192, "temperature": 0.6},
+            server={
+                "context_size": 65536,
+                "parallel": 4,
+                "max_output": 8192,
+                "temperature": 0.6,
+                "presence_penalty": 0.5,
+            },
             vllm={
                 "kv_cache_dtype": "fp8",
                 "enable_prefix_caching": False,
@@ -183,7 +212,7 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(self.option(command, "--default-chat-template-kwargs"), '{"enable_thinking":false}')
         self.assertEqual(
             json.loads(self.option(command, "--override-generation-config")),
-            {"temperature": 0.6, "repetition_penalty": 1.05, "max_new_tokens": 8192},
+            {"temperature": 0.6, "presence_penalty": 0.5, "repetition_penalty": 1.05, "max_new_tokens": 8192},
         )
         self.assertEqual(self.option(command, "--middleware"), vllm.MIDDLEWARE)
         key = read_key(self.key)
@@ -200,6 +229,13 @@ class LaunchTests(unittest.TestCase):
         self.assertNotIn("HF_HUB_OFFLINE", env)
         self.assertEqual(command[-2:], ["--seed", "1"])
 
+    def test_extra_args_tool_parser_enables_automatic_tool_choice(self):
+        for args in (["--tool-call-parser", "hermes"], ["--tool-call-parser=hermes"]):
+            with self.subTest(args=args):
+                command, _ = self.command(vllm_profile(server={"extra_args": args}, capabilities={"tools": True}))
+                self.assertIn("--enable-auto-tool-choice", command)
+                self.assertEqual(command[-len(args) :], args)
+
     def test_parallelism_must_fit_the_allocation(self):
         selected = vllm_profile(vllm={"pipeline_parallel_size": 2})
         command, _ = self.command(selected, gpus="4")
@@ -212,32 +248,6 @@ class LaunchTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "chat template"):
             self.command(vllm_profile(vllm={"chat_template": "templates/missing.jinja"}))
 
-    def test_runtime_resolution_order(self):
-        with self.assertRaisesRegex(ConfigError, "Prepare vLLM"):
-            vllm.runtime_command(self.root)
-        metadata = vllm.metadata_path(self.root)
-        metadata.parent.mkdir(parents=True)
-        metadata.write_text(str(self.binary))
-        self.assertEqual(vllm.runtime_command(self.root)[0], self.binary)
-        with patch.dict(os.environ, {"VLLM_BIN": str(self.root / "missing")}):
-            with self.assertRaisesRegex(ConfigError, "Cannot execute"):
-                vllm.runtime_command(self.root)
-
-    def test_runtime_exposes_venv_cuda_toolkit(self):
-        venv = self.root / "venv"
-        server = venv / "bin" / "vllm"
-        nvcc = venv / "lib" / "python3.12" / "site-packages" / "nvidia" / "cu13" / "bin" / "nvcc"
-        for path in (server, nvcc):
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("#!/bin/sh\n")
-            path.chmod(0o755)
-        (venv / "pyvenv.cfg").write_text("")
-        with patch.dict(os.environ, {"PATH": "/usr/bin"}):
-            os.environ.pop("CUDA_HOME", None)
-            _, env = vllm.runtime_command(self.root, str(server))
-        self.assertEqual(env["CUDA_HOME"], str(nvcc.parent.parent))
-        self.assertEqual(env["PATH"].split(os.pathsep), [str(server.parent), str(nvcc.parent), "/usr/bin"])
-
     def test_snapshot_freezes_checkpoint_and_executable(self):
         selected = vllm_profile(download={"repo": "org/model", "directory": "models/checkpoint"})
         data = snapshot(self.root, selected, self.key, str(self.binary))
@@ -245,43 +255,6 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(data["executable"], str(self.binary))
         with self.assertRaisesRegex(ConfigError, "2 GPUs"):
             snapshot(self.root, vllm_profile(vllm={"tensor_parallel_size": 2}), self.key, str(self.binary))
-
-    def test_prepare_installs_pinned_vllm_once(self):
-        (self.root / "config").mkdir()
-        (self.root / "config" / "runtime.toml").write_text('[vllm]\nversion = "0.30.0"\npackages = ["x>=1"]\n')
-        install = self.root / ".tools" / "vllm" / "0.30.0"
-        calls = []
-
-        def fake_run(command, **kwargs):
-            calls.append(command)
-            if command[:2] == ["uv", "venv"]:
-                (install / "bin").mkdir(parents=True)
-                (install / "bin" / "python").write_text("")
-            else:
-                (install / "bin" / "vllm").write_text("#!/bin/sh\n")
-                (install / "bin" / "vllm").chmod(0o755)
-
-        output = io.StringIO()
-        with patch("slurm_llm.vllm.run", side_effect=fake_run), contextlib.redirect_stdout(output):
-            prepare(self.root, vllm_profile(), self.key, runtime_only=True)
-            prepare(self.root, vllm_profile(), self.key, runtime_only=True)
-        self.assertEqual(len(calls), 2)
-        self.assertIn("vllm==0.30.0", calls[1])
-        self.assertIn("x>=1", calls[1])
-        self.assertEqual(vllm.metadata_path(self.root).read_text().strip(), str(install / "bin" / "vllm"))
-        self.assertIn("already prepared", output.getvalue())
-
-    def test_cuda_wheels_get_a_linkable_toolkit_layout(self):
-        toolkit = self.root / "venv" / "lib" / "python3.12" / "site-packages" / "nvidia" / "cu13"
-        (toolkit / "lib").mkdir(parents=True)
-        (toolkit / "lib" / "libcudart.so.13").write_text("")
-        (toolkit / "lib" / "libnvrtc.so.13").write_text("")
-        vllm.link_cuda_wheels(self.root / "venv")
-        vllm.link_cuda_wheels(self.root / "venv")
-        self.assertEqual(
-            (toolkit / "lib64" / "libcudart.so").resolve(), (toolkit / "lib" / "libcudart.so.13").resolve()
-        )
-        self.assertEqual((toolkit / "lib64" / "libnvrtc.so").resolve(), (toolkit / "lib" / "libnvrtc.so.13").resolve())
 
 
 class MiddlewareTests(unittest.TestCase):
@@ -313,9 +286,15 @@ class MiddlewareTests(unittest.TestCase):
         self.assertEqual(self.reached, [])
         self.call(self.http("/invocations", "secret"))
         self.call(self.http("/health", method="GET"))
-        self.call(self.http("/v1/models", method="OPTIONS"))
         self.call({"type": "lifespan"})
-        self.assertEqual(self.reached, ["/invocations", "/health", "/v1/models", "lifespan"])
+        self.assertEqual(self.reached, ["/invocations", "/health", "lifespan"])
+
+    def test_only_cors_preflights_bypass_options_authentication(self):
+        scope = self.http("/v1/models", method="OPTIONS")
+        self.assertEqual(self.call(scope)[0]["status"], 401)
+        scope["headers"] = [(b"origin", b"https://example.com"), (b"access-control-request-method", b"POST")]
+        self.call(scope)
+        self.assertEqual(self.reached, ["/v1/models"])
 
     def test_unauthenticated_websocket_is_closed(self):
         sent = self.call({"type": "websocket", "path": "/v1/realtime", "headers": []})

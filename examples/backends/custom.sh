@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Template for a script-backend profile; adapt the exec line to your serving engine.
-# vLLM has a native backend (backend = "vllm"); scripts are for other engines.
 set -euo pipefail
 : "${SERVER_BIN:?Set SERVER_BIN to the serving engine executable}"
 : "${LLM_API_KEY_FILE:?Missing API key file}"

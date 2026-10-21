@@ -1,15 +1,8 @@
-"""Require the server key on every vLLM route except /health.
-
-vLLM's built-in VLLM_API_KEY check only covers /v1, /v2, and /inference, leaving
-routes such as /invocations open. vLLM's own interpreter imports this module
-through --middleware, so it may use only the standard library.
-"""
+"""Authenticate vLLM routes using only its interpreter's standard library."""
 
 import hmac
 import json
 import os
-
-OPEN_PATHS = frozenset({"/health"})
 
 
 class BearerAuth:
@@ -21,13 +14,13 @@ class BearerAuth:
         self.expected = f"Bearer {key}".encode()
 
     def authorized(self, scope):
-        # CORS preflights never carry credentials and cannot reach a handler.
-        if scope["type"] == "http" and (scope["path"] in OPEN_PATHS or scope.get("method") == "OPTIONS"):
+        headers = dict(scope.get("headers", []))
+        preflight = (
+            scope.get("method") == "OPTIONS" and b"origin" in headers and b"access-control-request-method" in headers
+        )
+        if scope["type"] == "http" and (scope["path"] == "/health" or preflight):
             return True
-        for name, value in scope.get("headers", []):
-            if name == b"authorization":
-                return hmac.compare_digest(value.strip(), self.expected)
-        return False
+        return hmac.compare_digest(headers.get(b"authorization", b"").strip(), self.expected)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] not in ("http", "websocket") or self.authorized(scope):

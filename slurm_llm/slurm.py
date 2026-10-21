@@ -35,7 +35,6 @@ def snapshot(
             profile.model["file"] = str(model_path(root, profile))
             executable = str(runtime_command(root, executable)[0])
         elif profile.backend == "vllm":
-            # Freeze the prepared checkpoint so a later --quant/prepare cannot alter the job.
             source = vllm_model(root, profile)
             if Path(source).is_absolute():
                 profile.model["file"] = source

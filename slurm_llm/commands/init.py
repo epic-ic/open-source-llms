@@ -99,8 +99,8 @@ def execute(args: argparse.Namespace) -> None:
         data["scripts"] = {"serve": args.serve_script}
         if args.prepare_script:
             data["scripts"]["prepare"] = args.prepare_script
-    Profile(ident, data)  # Fail before writing if the profile is inconsistent.
-    lines = ["# Edit resource, context, and capability settings for your model.\n"]
+    Profile(ident, data)
+    lines = []
     for section, values in data.items():
         lines.append(f"[{section}]")
         for key, value in values.items():

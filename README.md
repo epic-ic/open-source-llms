@@ -111,9 +111,7 @@ interpreter, which the batch wrapper invokes directly with the frozen job settin
 Sync the environment on the login node before submission.
 
 If the checkout is a member of a parent uv workspace, uv uses that workspace's
-environment, lockfile, and Python constraints. This cluster checkout belongs to
-the parent `code` workspace, which currently selects Python 3.15. The same
-`uv sync` and `uv run llm-*` commands work there. See
+environment, lockfile, and Python constraints. See
 [uv workspaces](https://docs.astral.sh/uv/concepts/projects/workspaces/).
 
 ## Add a model
@@ -134,15 +132,14 @@ No model-specific Python or Slurm script is needed.
 For a safetensors checkpoint with vLLM:
 
 ```bash
-uv run llm-init my-model --backend vllm --repo ORG/MODEL \
-  --reasoning-parser qwen3 --tool-call-parser hermes
+uv run llm-init my-model --backend vllm --repo ORG/MODEL
 # Edit config/models/my-model.toml: [server] context/concurrency, [vllm] engine options.
 uv run llm-prepare my-model   # installs the pinned vLLM once, then downloads weights
 uv run llm-submit my-model
 ```
 
-`config/models/qwen-27b-vllm.toml` is a complete example: Qwen3.8 27B FP8 on one
-48 GB GPU, with tool calling and reasoning parsers. See [vLLM models](docs/models.md#vllm-models).
+The included vLLM profiles show model-specific parser and engine settings. Choose
+resources for your hardware; see [vLLM models](docs/models.md#vllm-models).
 
 For another engine, write a Bash serve script (`--backend script --serve-script PATH`).
 See [adding models and backends](docs/models.md) for the script contract.
@@ -170,9 +167,10 @@ requires both. See [harness setup and API examples](docs/harnesses.md).
 
 ## Included profiles
 
-These preserve the original model choices and resource requests. Resource sizes
-are starting configurations; choose weights and context that fit your hardware.
-Tracked profiles have no fixed cluster node, account, partition, or GPU type.
+Resource sizes are starting configurations; choose weights and context that fit
+your hardware. Profiles leave cluster node, account, and partition unset. The GLM
+NVFP4 profile selects a Blackwell GPU type; match `gpu_type` to your scheduler's
+names in `config/cluster.local.toml` or pass `--gpu-type` when submitting.
 
 | Profile          | Backend   | API model            |
 | ---------------- | --------- | -------------------- |
@@ -186,7 +184,8 @@ Shared runtime downloads remain pinned to llama.cpp `b11472` with CUDA 12.8 and
 verified SHA-256 hashes. Those binaries require Linux x86_64 and a compatible
 NVIDIA driver. Set `LLAMA_SERVER=/PATH/llama-server` to use your own build.
 vLLM is pinned to the version in `config/runtime.toml` and installed with uv into
-`.tools/vllm/VERSION`; set `VLLM_BIN=/PATH/bin/vllm` to use your own install.
+`.tools/vllm/VERSION-HASH`, where the hash identifies the install settings.
+Set `VLLM_BIN=/PATH/bin/vllm` to use your own install.
 
 ## Layout
 
@@ -196,7 +195,8 @@ config/runtime.toml    Pinned llama.cpp release/checksums and vLLM version
 uv.lock, .python-version  Locked project dependencies and Python version
 config/cluster.local.toml  Your cluster settings (ignored by Git)
 slurm_llm/             Configuration, preparation, backends, Slurm, clients, integrations
-slurm_llm/vllm.py      vLLM install, command construction, and auth middleware
+slurm_llm/vllm.py      vLLM installation and command construction
+slurm_llm/vllm_middleware/  Authentication loaded by vLLM's interpreter
 slurm_llm/commands/    Independent command parsers, handlers, and entry points
 slurm/serve.sbatch      One batch entry point for every model
 examples/              GGUF, vLLM, and script profile templates; a script backend template
@@ -213,7 +213,9 @@ Development checks:
 uv run python -m unittest discover -s tests -v
 uv run ruff check .
 uv run ruff format --check .
-bash -n scripts/prepare.sh slurm/serve.sbatch examples/backends/custom.sh
+for script in scripts/*.sh slurm/*.sbatch examples/backends/*.sh; do
+  bash -n "$script" || exit
+done
 ```
 
 The tests cover profile validation, shard completeness, credential retention,

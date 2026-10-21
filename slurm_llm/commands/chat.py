@@ -16,8 +16,6 @@ def parser() -> argparse.ArgumentParser:
     cli.add_argument("--model", help="API model ID; auto-discovered when omitted")
     cli.add_argument("--responses", action="store_true")
     cli.add_argument("--stream", action="store_true")
-    # A custom dest keeps this per-request flag out of the server-override
-    # namespace (SERVER_OPTIONS), where profile validation would reject it.
     cli.add_argument(
         "--reasoning-effort",
         dest="request_reasoning_effort",

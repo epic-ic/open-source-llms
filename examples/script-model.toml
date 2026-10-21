@@ -1,10 +1,9 @@
 # Copy to config/models/my-model.toml, or use `uv run llm-init --backend script`.
-# For vLLM, use backend = "vllm" instead (see examples/vllm-model.toml).
 [model]
 name = "My model with a custom engine"
 alias = "my-model"
 backend = "script"
-repo = "ORG/MODEL_REPOSITORY" # Replace with a model supported by your engine.
+repo = "ORG/MODEL_REPOSITORY"
 
 [scripts]
 serve = "examples/backends/custom.sh"

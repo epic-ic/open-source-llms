@@ -38,15 +38,24 @@ def validate_checkpoint(path: Path) -> Path:
     index = path / "model.safetensors.index.json"
     if index.is_file():
         try:
-            shards = set(json.loads(index.read_text())["weight_map"].values())
-        except (OSError, ValueError, KeyError, AttributeError) as exc:
+            data = json.loads(index.read_text())
+            weights = data.get("weight_map") if isinstance(data, dict) else None
+            if not isinstance(weights, dict) or not weights:
+                raise ValueError("weight_map must be a nonempty object")
+            for shard in weights.values():
+                if not isinstance(shard, str) or not shard or Path(shard).is_absolute() or ".." in Path(shard).parts:
+                    raise ValueError("weight_map must contain relative shard filenames")
+            shards = set(weights.values())
+        except (OSError, ValueError) as exc:
             raise ConfigError(f"Cannot read {index}: {exc}") from exc
         for shard in sorted(shards):
             file = path / shard
             if not file.is_file() or file.stat().st_size == 0:
                 raise ConfigError(f"Missing or empty safetensors shard: {file}")
     elif not any(
-        file.stat().st_size > 0 for pattern in ("*.safetensors", "*.bin", "*.pt") for file in path.glob(pattern)
+        file.is_file() and file.stat().st_size > 0
+        for pattern in ("*.safetensors", "*.bin", "*.pt")
+        for file in path.glob(pattern)
     ):
         raise ConfigError(f"No model weights in {path}")
     return path
@@ -74,7 +83,6 @@ def model_path(root: Path, profile: Profile, override: str | None = None) -> Pat
     state = state_path(root, profile)
     if state.is_file():
         return validate(resolve_path(root, state.read_text().strip()))
-    # Reuse existing downloads even if they were made with the old scripts.
     return download_entry(root, profile)
 
 

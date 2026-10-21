@@ -70,7 +70,7 @@ every quantization in a repository.
 | `[model]` | `name`, `alias`, `backend` (`llama.cpp`, `vllm`, or `script`), local `file`, Hub `repo` (vLLM/script), download `quant` |
 | `[server]` | `host`, `port`, `context_size`, `parallel`, `max_output`, `extra_args` |
 | `[server]`, llama.cpp | `gpu_layers`, `reasoning`, `reasoning_effort`, `temperature`, `top_p`, `top_k`, `min_p`, `presence_penalty`, `repeat_penalty`, `split_mode`, `tensor_split`, `lazy_mode`, `cache_type_k`, `cache_type_v`, `flash_attn` |
-| `[server]`, vLLM | `temperature`, `top_p`, `top_k`, `min_p`, `repeat_penalty` (server-side defaults) |
+| `[server]`, vLLM | `temperature`, `top_p`, `top_k`, `min_p`, `presence_penalty`, `repeat_penalty` (server defaults) |
 | `[vllm]`, vLLM | See [vLLM models](#vllm-models) |
 | `[slurm]` | `gpus`, `cpus_per_task`, `mem`, `time`, `partition`, `account`, `nodelist`, `constraint`, `gpu_type`, `qos` |
 | `[capabilities]` | `tools`, `responses` (both default to `false`), optional `reasoning_efforts` |
@@ -78,7 +78,7 @@ every quantization in a repository.
 
 `reasoning` accepts `on`, `off`, or `auto`. Reasoning effort, sampling, cache types,
 and special flags depend on the selected model/runtime. Unspecified sampling
-settings use the engine defaults; no Qwen-specific sampling is applied globally.
+settings use the engine defaults.
 Changing reasoning does not automatically change sampling—put appropriate values
 in the profile. Backend-specific additions go in `extra_args`, as separate argv
 items, e.g. `["--chat-template-file", "templates/my-model.jinja"]`.
@@ -119,35 +119,34 @@ server environment changes.
 
 ## vLLM models
 
-`backend = "vllm"` serves a Hugging Face checkpoint (safetensors) with
-[vLLM](https://docs.vllm.ai/). Use it for FP8/NVFP4/AWQ checkpoints, high
-concurrency, multimodal models, or models without a good GGUF. Create a profile
+`backend = "vllm"` serves a Hugging Face checkpoint with
+[vLLM](https://docs.vllm.ai/). Create a profile
 with `llm-init` or copy [the vLLM template](../examples/vllm-model.toml):
 
 ```bash
-uv run llm-init my-model --backend vllm --repo ORG/MODEL \
-  --reasoning-parser qwen3 --tool-call-parser hermes --tools
+uv run llm-init my-model --backend vllm --repo ORG/MODEL
 uv run llm-prepare my-model
 ```
 
-`llm-prepare` does two things for vLLM profiles:
+Add `--tool-call-parser NAME --tools` and `--reasoning-parser NAME` when those
+parsers match the model. Parser names depend on the pinned vLLM version.
+
+`llm-prepare` prepares the runtime and weights:
 
 1. **Runtime.** Installs the vLLM version pinned in `config/runtime.toml`
-   (`[vllm] version`) with uv into `.tools/vllm/VERSION`, using a uv-managed
+   (`[vllm] version`) with uv into `.tools/vllm/VERSION-HASH`, using a uv-managed
    Python under `.tools/python`, so compute nodes can run the same interpreter.
-   This runs once per version (several GB); later runs reuse it. Change the pin
-   to upgrade; the old environment is left in place. `packages` adds extra pins
-   (e.g. a newer `transformers`), `overrides` replaces vLLM's own pins via uv's
-   `--overrides` (e.g. `flashinfer-python==0.7.1`), and `torch_backend` passes
-   uv's `--torch-backend` (e.g. `cu129`) when the default PyPI torch build does
-   not suit your driver. Changing `packages`, `overrides` or `torch_backend`
-   reinstalls into the same environment on the next prepare.
+   Matching settings reuse a completed installation. Changing `version`,
+   `python`, `packages`, or `torch_backend` selects a separate environment,
+   preserving runtimes recorded in queued jobs. `packages` adds package
+   requirements compatible with vLLM's dependencies; `torch_backend` passes
+   uv's `--torch-backend` option. Other runtime keys are rejected.
    Set `VLLM_BIN=/PATH/bin/vllm` to use your own install instead.
 2. **Weights.** Downloads the `[download]` repository on the login node into
-   `directory`, then checks `config.json` and every shard listed in
-   `model.safetensors.index.json`. `include` defaults to configs, tokenizers,
+   `directory`, then requires `config.json` or `params.json` and checks every
+   shard listed in `model.safetensors.index.json`. `include` defaults to configs, tokenizers,
    chat templates, and `*.safetensors`, which skips `.bin` and GGUF duplicates;
-   narrow it if a repository carries a second safetensors copy (e.g. `original/`).
+   override it for other weight formats or duplicate checkpoint directories.
    `entrypoint` is not used: vLLM loads the directory.
 
 Model sources, in priority order: `model.file` (an existing local model
@@ -162,23 +161,23 @@ and delays startup). With local weights, jobs set `HF_HUB_OFFLINE=1`.
 | --- | --- | --- |
 | `server.context_size` | `--max-model-len` | Maximum prompt + output tokens per request |
 | `server.parallel` | `--max-num-seqs` | Maximum concurrently running requests |
-| `server.max_output` | `max_new_tokens` default | `max_tokens` for requests that omit it |
-| `slurm.gpus` | `--tensor-parallel-size` | Unless `vllm.tensor_parallel_size` is set |
+| `server.max_output` | `max_new_tokens` generation override | Default and upper limit on output tokens |
+| `slurm.gpus` | `--tensor-parallel-size` | Allocated GPUs divided by pipeline size, unless explicitly set |
 
 All sequences share one KV-cache pool sized by `gpu_memory_utilization`, so
 `context_size` is not divided by `parallel`: harness configs advertise the full
 `context_size`. vLLM refuses to start if one `context_size` sequence cannot fit
 in the pool. When many long requests run together, it queues or preempts them.
-The startup log reports the pool size ("GPU KV cache size: N tokens") and the
-maximum concurrency at full length; tune `context_size`, `parallel`,
-`kv_cache_dtype`, and `gpu_memory_utilization` from that line. Unlike
-llama.cpp's `--n-predict`, `max_output` is a default, not a cap: clients may ask
-for up to the remaining context.
+Use the startup log's KV-cache capacity and concurrency estimates to tune
+`context_size`, `parallel`, `kv_cache_dtype`, and `gpu_memory_utilization`.
+`max_output` supplies the default output budget and caps larger client requests;
+prompt plus output must also fit the context. See vLLM's
+[generation configuration](https://docs.vllm.ai/en/latest/cli/serve/#--generation-config).
 
 Sampling keys become `--override-generation-config` defaults on top of the
 checkpoint's `generation_config.json`; requests can still override them.
-`repeat_penalty` maps to vLLM's `repetition_penalty`. vLLM cannot set a default
-`presence_penalty`, so that key is rejected; send it per request.
+`repeat_penalty` maps to vLLM's `repetition_penalty`; `presence_penalty` is passed
+through with the same name.
 
 ### Engine options
 
@@ -188,11 +187,11 @@ checkpoint's `generation_config.json`; requests can still override them.
 | `enable_expert_parallel` | MoE models: spread experts across the GPUs instead of slicing each expert |
 | `gpu_memory_utilization` | Fraction of each GPU for weights + KV cache (vLLM default 0.9) |
 | `max_num_batched_tokens` | Prefill chunk budget per step |
-| `dtype`, `quantization`, `kv_cache_dtype` | Usually auto-detected; `kv_cache_dtype = "fp8"` roughly doubles KV capacity |
+| `dtype`, `quantization`, `kv_cache_dtype` | Same-named vLLM flags |
 | `enable_prefix_caching` | `true`/`false`: `--enable-prefix-caching` / `--no-enable-prefix-caching` |
 | `enforce_eager`, `trust_remote_code`, `language_model_only` | Switches; `language_model_only` skips a multimodal model's vision tower |
-| `reasoning_parser` | Splits thinking into `reasoning_content` (e.g. `qwen3`, `deepseek_r1`) |
-| `tool_call_parser` | Enables `--enable-auto-tool-choice` with this parser; **required** by `capabilities.tools` |
+| `reasoning_parser` | Extracts reasoning from model output |
+| `tool_call_parser` | Enables `--enable-auto-tool-choice` with this parser; required by `capabilities.tools` (also accepted through `extra_args`) |
 | `chat_template` | Template path, relative to the repository or absolute; checked before launch |
 | `chat_template_kwargs` | Server-wide `--default-chat-template-kwargs`, e.g. `{ enable_thinking = false }` |
 | `generation_config` | `auto` (checkpoint), `vllm` (ignore checkpoint), or a directory |
@@ -216,7 +215,7 @@ as `/invocations` open
 ([details](https://docs.vllm.ai/en/latest/usage/security.html#api-key-authentication-limitations)).
 Every vLLM job therefore also loads a stdlib ASGI middleware
 (`slurm_llm/vllm_middleware/slurm_llm_auth.py`) that requires the bearer key on all
-routes except `/health`, matching llama.cpp. Usage statistics are disabled with
+routes except `/health` and CORS preflights. Usage statistics are disabled with
 `VLLM_NO_USAGE_STATS=1` unless you set it.
 
 ### Runtime overrides
@@ -267,9 +266,7 @@ codes. The server must enforce authentication and expose `/v1/models` and
 same alias, context, output budget, and capabilities used in the profile.
 
 [The script template](../examples/backends/custom.sh) shows the shape of an
-adapter. vLLM profiles that used a script with `examples/backends/vllm.sh` should
-switch to `backend = "vllm"`: remove `[scripts]`, move parser flags from
-`extra_args` into `[vllm]`, and use the per-request `context_size` described above.
+adapter. Adapt its flags and credential environment variable to your engine.
 
 For another agent harness, add a pure config renderer in
 `slurm_llm/integrations.py` and expose it in `slurm_llm/commands/config.py`. Keep aliases,

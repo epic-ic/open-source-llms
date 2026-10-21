@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import re
 import tomllib
@@ -88,12 +89,10 @@ SERVER_DEFAULTS = {
     "extra_args": [],
 }
 LLAMA_DEFAULTS = {"gpu_layers": 99}
-# Server keys that only llama.cpp understands, with the vLLM equivalent to suggest.
 LLAMA_ONLY = {
     "gpu_layers": "vLLM always loads the whole model on the GPUs",
     "reasoning": "set vllm.chat_template_kwargs, e.g. { enable_thinking = false }",
     "reasoning_effort": 'set vllm.chat_template_kwargs, e.g. { reasoning_effort = "low" }',
-    "presence_penalty": "vLLM cannot default it server-side; send it per request",
     "split_mode": "use vllm.tensor_parallel_size or vllm.pipeline_parallel_size",
     "tensor_split": "use vllm.tensor_parallel_size or vllm.pipeline_parallel_size",
     "lazy_mode": "no vLLM equivalent",
@@ -102,7 +101,6 @@ LLAMA_ONLY = {
     "flash_attn": "vLLM selects its attention backend; override with vllm.env",
 }
 REQUIRED_DOWNLOAD = ("repo", "directory", "entrypoint")
-# Weights, configs, tokenizers, and templates; skips duplicate PyTorch/GGUF copies.
 VLLM_INCLUDE = ("*.json", "*.safetensors", "*.jinja", "*.txt", "*.model", "*.tiktoken", "*.py")
 VLLM_STRINGS = (
     "dtype",
@@ -113,7 +111,6 @@ VLLM_STRINGS = (
     "chat_template",
     "generation_config",
 )
-# Values vLLM's Chat Completions API accepts for reasoning_effort.
 VLLM_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
 VLLM_FLAGS = (
     "enable_prefix_caching",
@@ -181,10 +178,10 @@ def strings(value: Any, label: str) -> list[str]:
 
 
 def relative_path(value: str, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ConfigError(f"{label} must be a nonempty path relative to the repository")
     parts = Path(value).parts
-    # A leading "~" is expanded to the user's home directory by resolve_path,
-    # so it escapes the repository just like ".." or an absolute path would.
-    if not value or Path(value).is_absolute() or ".." in parts or (parts and parts[0].startswith("~")):
+    if Path(value).is_absolute() or ".." in parts or (parts and parts[0].startswith("~")):
         raise ConfigError(f"{label} must be a nonempty path relative to the repository")
     return value
 
@@ -273,10 +270,9 @@ class Profile:
             raise ConfigError("A llama.cpp profile requires model.file or a download section")
         if self.backend == "vllm":
             self.validate_vllm()
-        elif self.vllm:
+        elif "vllm" in self.data:
             raise ConfigError("[vllm] only applies to backend = 'vllm'")
         if self.download:
-            # vLLM serves the whole download directory, so it needs no entry point.
             required = ("repo", "directory") if self.backend == "vllm" else REQUIRED_DOWNLOAD
             for key in required:
                 if not isinstance(self.download.get(key), str) or not self.download[key]:
@@ -317,6 +313,11 @@ class Profile:
         for key in ("chat_template_kwargs", "speculative_config", "hf_overrides", "env"):
             if key in settings and not isinstance(settings[key], dict):
                 raise ConfigError(f"vllm.{key} must be a table")
+            if key in settings:
+                try:
+                    json.dumps(settings[key], allow_nan=False)
+                except (TypeError, ValueError) as exc:
+                    raise ConfigError(f"vllm.{key} must contain JSON-compatible values") from exc
         for name, value in settings.get("env", {}).items():
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or not isinstance(value, str):
                 raise ConfigError("vllm.env must map variable names to strings")
@@ -325,9 +326,9 @@ class Profile:
         unknown = set(self.capabilities.get("reasoning_efforts", [])) - set(VLLM_EFFORTS)
         if unknown:
             raise ConfigError(f"vLLM rejects reasoning effort(s): {', '.join(sorted(unknown))}")
-        # Without a parser, vLLM returns tool calls as plain text.
         if self.capabilities["tools"] and not (
-            "tool_call_parser" in settings or "--tool-call-parser" in server["extra_args"]
+            "tool_call_parser" in settings
+            or any(arg.split("=", 1)[0] == "--tool-call-parser" for arg in server["extra_args"])
         ):
             raise ConfigError("capabilities.tools requires vllm.tool_call_parser for vLLM")
 
@@ -365,8 +366,6 @@ class Profile:
 
     @property
     def context_per_request(self) -> int:
-        # llama.cpp divides its context between slots; vLLM pages one shared KV cache,
-        # so every sequence may use the full max_model_len.
         if self.backend == "vllm":
             return self.server["context_size"]
         return self.server["context_size"] // self.server["parallel"]
@@ -420,7 +419,6 @@ def effective_profile(
         for variable, (key, convert) in SERVER_ENV.items():
             if variable not in os.environ:
                 continue
-            # Shell-wide llama.cpp tuning must not invalidate a vLLM profile.
             if profile.backend == "vllm" and key in LLAMA_ONLY:
                 continue
             try:

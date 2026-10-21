@@ -12,7 +12,6 @@ backend = "vllm"
 repo = "ORG/MODEL" # A safetensors checkpoint supported by your vLLM version.
 revision = "main"  # Use a commit ID to make downloads reproducible.
 directory = "models/my-model"
-# include defaults to configs, tokenizers, templates, and *.safetensors.
 
 [server]
 context_size = 32768 # vLLM --max-model-len: tokens per request

@@ -102,6 +102,9 @@ uv run llm-chat --responses --stream "Explain this server in one sentence."
 printf '%s\n' 'Summarize this text.' | uv run llm-chat -
 ```
 
+Use `--reasoning-effort LEVEL` with `llm-chat` to set effort for that request.
+Choose a level supported by the model; this flag does not change server defaults.
+
 `--profile my-model` selects its port, alias, and output budget. `--model` overrides
 the alias; `--base-url` overrides `LLM_BASE_URL`. `LLM_MODEL` is another alias
 override. Key selection is explicit `--api-key-file`, then `LLM_API_KEY`, then

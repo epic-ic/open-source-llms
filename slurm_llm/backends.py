@@ -72,7 +72,10 @@ def prepare(
 ) -> None:
     if profile.backend in ("llama.cpp", "vllm"):
         if not model_only:
-            (prepare_runtime if profile.backend == "llama.cpp" else vllm.prepare_runtime)(root)
+            if profile.backend == "vllm":
+                vllm.prepare_runtime(root)
+            else:
+                prepare_runtime(root)
         hub_only = profile.backend == "vllm" and not profile.download and not profile.model.get("file")
         if hub_only and not runtime_only:
             if quant:
@@ -104,7 +107,7 @@ def allocation_gpus(profile: Profile) -> int:
     visible = os.getenv("CUDA_VISIBLE_DEVICES", "")
     if visible and visible not in {"-1", "NoDevFiles"}:
         return len(visible.split(","))
-    raise ConfigError("Cannot determine GPU count; set server.tensor_split or vllm.tensor_parallel_size")
+    raise ConfigError("Cannot determine GPU count from SLURM_GPUS_ON_NODE or CUDA_VISIBLE_DEVICES")
 
 
 def server_command(

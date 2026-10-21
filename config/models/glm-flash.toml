@@ -27,7 +27,7 @@ split_mode = "layer"
 cache_type_k = "q8_0"
 cache_type_v = "q8_0"
 flash_attn = "on"
-extra_args = ["--cache-reuse", "256", "--ubatch-size", "1024" ,"--metrics"]
+extra_args = ["--cache-reuse", "256", "--ubatch-size", "1024", "--metrics"]
 
 [slurm]
 gpus = 6
